@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Member, Receipt, DashboardData, StreetData, MemberStatement } from '../types';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -155,7 +155,8 @@ export const reportsApi = {
     return res.data;
   },
   exportExcelUrl: (year: number, month: number, street?: number | string) => {
-    const base = `/api/reports/export_excel/?year=${year}&month=${month}`;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+    const base = `${apiBase}/reports/export_excel/?year=${year}&month=${month}`;
     return street ? `${base}&street=${street}` : base;
   },
 };

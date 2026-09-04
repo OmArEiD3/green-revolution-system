@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Shield, Database, Download, History, CheckCircle2 } from 'lucide-react';
-import { auditLogsApi } from '../api/client';
+import { auditLogsApi, reportsApi } from '../api/client';
 
 export const SettingsView: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -75,7 +75,10 @@ export const SettingsView: React.FC = () => {
 
           <div className="pt-2">
             <button
-              onClick={() => window.open('/api/reports/export_excel/?year=2026&month=9', '_blank')}
+              onClick={() => {
+                const now = new Date();
+                window.open(reportsApi.exportExcelUrl(now.getFullYear(), now.getMonth() + 1), '_blank');
+              }}
               className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
             >
               <Download className="w-4 h-4" />
