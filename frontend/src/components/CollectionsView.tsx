@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  DollarSign, Search, Filter, CheckCircle2, Clock,
-  AlertCircle, ArrowUpRight, Plus, Users, MapPin, ChevronLeft, CalendarPlus
-} from 'lucide-react';
+import { DollarSign, Search, CheckCircle2, MapPin, CalendarPlus } from 'lucide-react';
 import { Practice } from '../types';
 import { practicesApi } from '../api/client';
 

@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  X, Phone, Shield, Calendar, DollarSign, ReceiptText,
-  ArrowUpRight, CheckCircle2, Clock, AlertCircle, Sparkles, MapPin, CalendarPlus, Plus
-} from 'lucide-react';
+import { X, Phone, Shield, Calendar, DollarSign, Plus } from 'lucide-react';
 import { MemberStatement } from '../types';
 import { membersApi } from '../api/client';
 

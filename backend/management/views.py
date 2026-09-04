@@ -33,31 +33,11 @@ class AuthViewSet(viewsets.ViewSet):
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '').strip()
 
-        # For production/convenience, ensure an admin engineer account exists
-        user = User.objects.filter(username=username).first()
-        if not user and username.lower() in ['engineer', 'admin']:
-            user = User.objects.create_superuser(username=username, password=password or 'admin123', email='engineer@thawra.local')
-        
-        user = authenticate(username=username, password=password)
-        if user is not None:
-            login(request, user)
-            return Response({
-                'success': True,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'first_name': user.first_name or 'المهندس المسؤول',
-                    'email': user.email,
-                    'is_staff': user.is_staff
-                },
-                'message': 'تم تسجيل الدخول بنجاح'
-            })
-        
-        # Also allow quick dev login if password matches default
-        if username and password in ['admin123', 'admin', 'engineer123']:
-            user, _ = User.objects.get_or_create(username=username, defaults={'is_staff': True, 'first_name': 'المهندس المسؤول'})
-            user.set_password(password)
-            user.save()
+        if not username or not password:
+            return Response({'success': False, 'error': 'يجب إدخال اسم المستخدم وكلمة المرور'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, username=username, password=password)
+        if user is not None and user.is_active:
             login(request, user)
             return Response({
                 'success': True,
@@ -99,7 +79,9 @@ class MemberViewSet(viewsets.ModelViewSet):
     search_fields = ['full_name', 'mobile_number', 'national_id']
 
     def get_queryset(self):
-        qs = Member.objects.filter(is_deleted=False)
+        qs = Member.objects.filter(is_deleted=False).annotate(
+            practices_count=Count('practices', filter=Q(practices__is_deleted=False), distinct=True)
+        )
         street = self.request.query_params.get('street')
         is_active = self.request.query_params.get('is_active')
         search_query = self.request.query_params.get('search')
@@ -115,7 +97,7 @@ class MemberViewSet(viewsets.ModelViewSet):
                 Q(national_id__icontains=search_query) |
                 Q(id__iexact=search_query)
             )
-        return qs.order_index_by_street() if hasattr(qs, 'order_index_by_street') else qs.order_by('street_number', 'full_name')
+        return qs.order_by('street_number', 'full_name')
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

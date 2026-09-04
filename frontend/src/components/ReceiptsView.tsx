@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  ReceiptText, Search, Camera, Upload, CheckCircle2,
-  Clock, AlertCircle, Eye, X, Image as ImageIcon, MapPin, Sparkles
-} from 'lucide-react';
+import { ReceiptText, Search, Camera, CheckCircle2, Eye, X, MapPin } from 'lucide-react';
 import { Receipt } from '../types';
 import { receiptsApi } from '../api/client';
 
@@ -47,7 +44,7 @@ export const ReceiptsView: React.FC<ReceiptsViewProps> = ({
     try {
       await receiptsApi.markReceived(id);
       fetchReceipts();
-    } catch (err) {
+    } catch {
       alert('حدث خطأ أثناء تحديث حالة الإيصال');
     }
   };
@@ -56,7 +53,7 @@ export const ReceiptsView: React.FC<ReceiptsViewProps> = ({
     try {
       await receiptsApi.markDelivered(id);
       fetchReceipts();
-    } catch (err) {
+    } catch {
       alert('حدث خطأ أثناء تسجيل تسليم الإيصال');
     }
   };
@@ -67,7 +64,7 @@ export const ReceiptsView: React.FC<ReceiptsViewProps> = ({
     try {
       await receiptsApi.uploadImage(receiptId, file);
       fetchReceipts();
-    } catch (err) {
+    } catch {
       alert('حدث خطأ أثناء رفع صورة الإيصال');
     }
   };

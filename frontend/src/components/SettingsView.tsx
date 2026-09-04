@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Settings as SettingsIcon, Shield, Database, Download,
-  History, CheckCircle2, Sparkles, MapPin
-} from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Database, Download, History, CheckCircle2 } from 'lucide-react';
 import { auditLogsApi } from '../api/client';
 
 export const SettingsView: React.FC = () => {

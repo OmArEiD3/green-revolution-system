@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Users, Search, Filter, Phone, MapPin, Plus, UserCheck,
-  Shield, ChevronLeft, Eye, X, MessageSquare
-} from 'lucide-react';
+import { Users, Search, Phone, MapPin, Plus, Shield, ChevronLeft, X } from 'lucide-react';
 import { Member } from '../types';
 import { membersApi } from '../api/client';
 

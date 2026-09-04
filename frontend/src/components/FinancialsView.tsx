@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  ShieldCheck, ArrowUpRight, Receipt, Plus, DollarSign,
-  TrendingDown, TrendingUp, Calendar, Filter, User, FileText, Check, Sparkles
-} from 'lucide-react';
+import { ShieldCheck, ArrowUpRight, Plus, TrendingDown } from 'lucide-react';
 import { Expense, FinancialTransaction } from '../types';
 import { expensesApi, financialApi } from '../api/client';
 
@@ -68,7 +65,7 @@ export const FinancialsView: React.FC<FinancialsViewProps> = ({
       setManualSource('');
       setManualDesc('');
       fetchData();
-    } catch (err) {
+    } catch {
       alert('حدث خطأ أثناء حفظ المبلغ الزائد');
     }
   };

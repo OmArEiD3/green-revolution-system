@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Users, ChevronLeft, ArrowRight, TrendingUp, Sparkles, CheckCircle2 } from 'lucide-react';
+import { MapPin, Users, ChevronLeft, ArrowRight } from 'lucide-react';
 import { StreetData } from '../types';
 import { reportsApi } from '../api/client';
 

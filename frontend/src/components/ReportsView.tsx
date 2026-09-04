@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  FileSpreadsheet, Download, Filter, Calendar, MapPin,
-  TrendingUp, Users, DollarSign, CheckCircle2, Sparkles, ArrowRight
-} from 'lucide-react';
+import { FileSpreadsheet, Download } from 'lucide-react';
 import { StreetData } from '../types';
 import { reportsApi } from '../api/client';
 
@@ -45,6 +42,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
   ];
 
+  if (loading && streets.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-24 text-slate-400 text-sm font-bold animate-pulse">
+        جاري تحميل التقارير...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 animate-slide-up">
       {/* Header & Export Action */}
@@ -59,13 +64,28 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleExportExcel}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-900/20 transition-all active:scale-95"
-        >
-          <Download className="w-4 h-4 stroke-[2.5]" />
-          <span>تصدير كشف إكسيل كامل (.xlsx)</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedStreetFilter}
+            onChange={(e) => setSelectedStreetFilter(e.target.value)}
+            className="px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-xs font-bold bg-white"
+          >
+            <option value="">كل الشوارع</option>
+            {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+              <option key={s} value={s}>
+                شارع {s}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-900/20 transition-all active:scale-95"
+          >
+            <Download className="w-4 h-4 stroke-[2.5]" />
+            <span>تصدير كشف إكسيل (.xlsx)</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Overview Grid */}

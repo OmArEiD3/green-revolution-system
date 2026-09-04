@@ -1,8 +1,5 @@
 import axios from 'axios';
-import {
-  Member, Practice, PracticeType, Payment, Receipt,
-  Expense, FinancialTransaction, DashboardData, StreetData, MemberStatement
-} from '../types';
+import { Member, Receipt, DashboardData, StreetData, MemberStatement } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -10,6 +7,12 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  // Django's CSRF protection expects the token from the "csrftoken" cookie
+  // to be echoed back in an "X-CSRFToken" header on unsafe requests
+  // (POST/PATCH/PUT/DELETE). Axios reads/sends this automatically once
+  // these two options are set.
+  xsrfCookieName: 'csrftoken',
+  xsrfHeaderName: 'X-CSRFToken',
 });
 
 export const authApi = {

@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Users, DollarSign, ReceiptText, ArrowUpRight, TrendingUp,
-  AlertCircle, CheckCircle2, Clock, PlusCircle, ShieldCheck,
-  FileSpreadsheet, ArrowRight, RefreshCw, Zap, Award, Sparkles, MapPin, CalendarPlus
-} from 'lucide-react';
+import { Users, DollarSign, ReceiptText, TrendingUp, CheckCircle2, Clock, ShieldCheck, ArrowRight, Zap, CalendarPlus } from 'lucide-react';
 import { DashboardData } from '../types';
 import { reportsApi } from '../api/client';
 
@@ -50,6 +46,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const totalReq = Number(data?.collections.total_required || 0);
   const totalPaid = Number(data?.collections.total_paid || 0);
   const collectionPercentage = totalReq > 0 ? Math.min(100, Math.round((totalPaid / totalReq) * 100)) : 0;
+
+  if (loading && !data) {
+    return (
+      <div className="flex items-center justify-center py-24 text-slate-400 text-sm font-bold animate-pulse">
+        جاري تحميل بيانات لوحة التحكم...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-slide-up">

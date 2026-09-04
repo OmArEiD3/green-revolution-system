@@ -68,7 +68,12 @@ class PracticeSerializer(serializers.ModelSerializer):
 
 
 class MemberSerializer(serializers.ModelSerializer):
-    practices_count = serializers.IntegerField(read_only=True, default=0)
+    # Populated via annotation in MemberViewSet.get_queryset(); falls back to
+    # 0 if a Member instance is serialized without that annotation.
+    practices_count = serializers.SerializerMethodField()
+
+    def get_practices_count(self, obj):
+        return getattr(obj, 'practices_count', 0)
 
     class Meta:
         model = Member

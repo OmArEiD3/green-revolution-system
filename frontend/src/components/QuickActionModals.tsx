@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, DollarSign, UserPlus, Receipt, ArrowUpRight, CalendarPlus, Sparkles, Plus } from 'lucide-react';
+import { X, Check, DollarSign, UserPlus, Receipt, ArrowUpRight, CalendarPlus } from 'lucide-react';
 import { Member, Practice, PracticeType } from '../types';
 import { membersApi, practicesApi, paymentsApi, practiceTypesApi, expensesApi } from '../api/client';
 
@@ -179,7 +179,6 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
     </div>
   );
 };
-
 
 // 2. Add Monthly Practice Modal (Select Member -> Select Month -> Enter Amount)
 interface AddPracticeModalProps extends ModalBaseProps {
@@ -412,7 +411,6 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
   );
 };
 
-
 // 3. Record Payment Modal (Simplified to Full Payment or Overpayment)
 interface RecordPaymentModalProps extends ModalBaseProps {
   initialPracticeId?: number;
@@ -631,6 +629,17 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">ملاحظات (اختياري)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="أي تفاصيل إضافية عن الدفعة..."
+              className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs font-semibold resize-none focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none"
+            />
+          </div>
+
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
             <button
               type="button"
@@ -653,7 +662,6 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     </div>
   );
 };
-
 
 // 4. Add Expense Modal
 export const AddExpenseModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -761,6 +769,17 @@ export const AddExpenseModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onS
               value={expenseDate}
               onChange={(e) => setExpenseDate(e.target.value)}
               className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs font-semibold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">الوصف والتفاصيل (اختياري)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="تفاصيل إضافية عن المصروف..."
+              className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs font-semibold resize-none focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none"
             />
           </div>
 

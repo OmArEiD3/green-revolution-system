@@ -1,3 +1,5 @@
+import os
+import secrets
 from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
@@ -9,9 +11,14 @@ class Command(BaseCommand):
     help = "Seed initial data for Green Revolution Management System (الثورة الخضراء)"
 
     def handle(self, *args, **options):
+        self.stdout.write(self.style.WARNING(
+            "This command seeds DEMO data for local development only. "
+            "Do not run it against a production database."
+        ))
         self.stdout.write("Starting data seeding...")
 
-        # 1. Superuser Engineer
+        # 1. Superuser Engineer (dev-only demo account)
+        demo_password = os.environ.get('SEED_ADMIN_PASSWORD') or secrets.token_urlsafe(9)
         user, created = User.objects.get_or_create(
             username='engineer',
             defaults={
@@ -21,9 +28,12 @@ class Command(BaseCommand):
                 'is_superuser': True
             }
         )
-        user.set_password('admin123')
+        user.set_password(demo_password)
         user.save()
-        self.stdout.write(self.style.SUCCESS("[OK] Engineer account: username=engineer, password=admin123"))
+        self.stdout.write(self.style.SUCCESS(
+            f"[OK] Engineer account created: username=engineer, password={demo_password} "
+            "(save this now — set SEED_ADMIN_PASSWORD env var to choose your own)"
+        ))
 
         # 2. Practice Types
         pt_main, _ = PracticeType.objects.get_or_create(

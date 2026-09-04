@@ -1,0 +1,16 @@
+# Core framework
+Django==6.1.1
+djangorestframework==3.18.0
+django-cors-headers==4.9.0
+
+# Excel export (reports)
+openpyxl==3.1.5
+
+# Required for ImageField (receipt/expense document photos)
+Pillow==12.3.0
+
+# Loads variables from a local .env file (see .env.example)
+python-dotenv==1.2.3
+
+# --- Production only (uncomment when deploying behind Nginx/Apache) ---
+# gunicorn==23.0.0
