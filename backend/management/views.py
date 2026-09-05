@@ -29,10 +29,11 @@ from .services import FinancialService
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
-    @action(detail=False, methods=['post'])
     @action(detail=False, methods=['get'])
     def csrf(self, request):
         return Response({'csrfToken': get_token(request)})
+
+    @action(detail=False, methods=['post'])
     def login(self, request):
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '').strip()
