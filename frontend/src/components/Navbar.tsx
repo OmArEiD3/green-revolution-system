@@ -54,8 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 glass-nav shadow-lg transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-18">
-          {/* Brand Logo & Area Identity */}
+        <div className="flex items-center justify-between gap-2 min-h-16 sm:min-h-18 py-2">          {/* Brand Logo & Area Identity */}
           <div
             onClick={() => setActiveTab('dashboard')}
             className="flex items-center gap-3 cursor-pointer group"
@@ -71,15 +70,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-lg sm:text-xl text-white tracking-tight drop-shadow-sm">
-                  الثورة الخضراء
+                <span className="font-black text-base sm:text-xl text-white tracking-tight drop-shadow-sm whitespace-nowrap">                  الثورة الخضراء
                 </span>
                 <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   الإدارة الميدانية
                 </span>
               </div>
-              <div className="text-[11px] text-emerald-200/90 font-medium">
-                نظام إدارة الشوارع والتحصيل والممارسات
+              <div className="hidden sm:block text-[11px] text-emerald-200/90 font-medium">                نظام إدارة الشوارع والتحصيل والممارسات
               </div>
             </div>
           </div>
@@ -93,11 +90,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    isActive
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/50'
-                      : 'text-emerald-200 hover:text-white hover:bg-emerald-800/50'
-                  }`}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isActive
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/50'
+                    : 'text-emerald-200 hover:text-white hover:bg-emerald-800/50'
+                    }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : ''}`} />
                   <span>{tab.label}</span>
@@ -176,16 +172,14 @@ export const BottomNav: React.FC<{
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center gap-1 transition-all relative ${
-                isActive ? 'text-emerald-700 font-black' : 'text-slate-500 hover:text-slate-800 font-semibold'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 transition-all relative ${isActive ? 'text-emerald-700 font-black' : 'text-slate-500 hover:text-slate-800 font-semibold'
+                }`}
             >
               <div
-                className={`p-1.5 rounded-2xl transition-all duration-300 ${
-                  isActive
-                    ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-600/30 scale-110 -translate-y-1'
-                    : 'text-slate-500'
-                }`}
+                className={`p-1.5 rounded-2xl transition-all duration-300 ${isActive
+                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-600/30 scale-110 -translate-y-1'
+                  : 'text-slate-500'
+                  }`}
               >
                 <Icon className="w-4 h-4 stroke-[2.5]" />
               </div>
