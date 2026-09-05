@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Shield, Calendar, DollarSign, Plus } from 'lucide-react';
+import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil } from 'lucide-react';
 import { MemberStatement } from '../types';
 import { membersApi } from '../api/client';
 
@@ -9,6 +9,7 @@ interface MemberDetailModalProps {
   onClose: () => void;
   onRecordPayment: (practiceId: number, memberId: number) => void;
   onOpenAddPracticeForMember?: (memberId: number) => void;
+  onEditMember?: (memberId: number) => void;
   year: number;
   month: number;
 }
@@ -19,6 +20,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onClose,
   onRecordPayment,
   onOpenAddPracticeForMember,
+  onEditMember,
   year,
   month,
 }) => {
@@ -65,21 +67,39 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
-                  <a href={`tel:${m?.mobile_number}`} className="flex items-center gap-1 hover:text-emerald-700 font-bold">
-                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="font-mono">{m?.mobile_number}</span>
-                  </a>
+                  {m?.mobile_number ? (
+                    <a href={`tel:${m.mobile_number}`} className="flex items-center gap-1 hover:text-emerald-700 font-bold">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="font-mono">{m.mobile_number}</span>
+                    </a>
+                  ) : (
+                    <span className="text-slate-400 italic">لا يوجد رقم موبايل مسجل</span>
+                  )}
                   {m?.national_id && <span className="font-mono text-slate-400">الرقم القومي: {m.national_id}</span>}
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-2 rounded-2xl bg-white hover:bg-slate-200 text-slate-400 hover:text-slate-700 border border-slate-200 transition-colors shadow-sm"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onEditMember && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onEditMember(m!.id);
+                  }}
+                  className="p-2 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors shadow-sm"
+                  title="تعديل بيانات العضو"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 rounded-2xl bg-white hover:bg-slate-200 text-slate-400 hover:text-slate-700 border border-slate-200 transition-colors shadow-sm"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Guard details pill */}
@@ -91,15 +111,26 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                   الغفير المسؤول: <strong>{m.guard_name || 'مسجل'}</strong>
                 </span>
               </div>
-              {m.guard_mobile && (
-                <a
-                  href={`tel:${m.guard_mobile}`}
-                  className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200"
-                >
-                  <Phone className="w-3 h-3" />
-                  <span className="font-mono">{m.guard_mobile}</span>
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {m.guard_mobile && (
+                  <a
+                    href={`tel:${m.guard_mobile}`}
+                    className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span className="font-mono">{m.guard_mobile}</span>
+                  </a>
+                )}
+                {m.guard_mobile_2 && (
+                  <a
+                    href={`tel:${m.guard_mobile_2}`}
+                    className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span className="font-mono">{m.guard_mobile_2}</span>
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -9,10 +9,10 @@ import { FinancialsView } from './components/FinancialsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { LoginView } from './components/LoginView';
-import { AddMemberModal, AddPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/QuickActionModals';
+import { AddMemberModal, EditMemberModal, AddPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/QuickActionModals';
 import { MemberDetailModal } from './components/MemberDetailModal';
-import { User } from './types';
-import { authApi } from './api/client';
+import { User, Member } from './types';
+import { authApi, membersApi } from './api/client';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -34,6 +34,8 @@ export const App: React.FC = () => {
   const [paymentModalData, setPaymentModalData] = useState<{ practiceId?: number; memberId?: number }>({});
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [selectedMemberDetailId, setSelectedMemberDetailId] = useState<number | null>(null);
+  const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
+  const [editMemberData, setEditMemberData] = useState<Member | null>(null);
 
   // Refresh trigger for views after actions
   const [refreshKey, setRefreshKey] = useState(0);
@@ -72,6 +74,16 @@ export const App: React.FC = () => {
   const handleOpenAddPractice = (memberId?: number) => {
     setAddPracticeMemberId(memberId);
     setIsAddPracticeOpen(true);
+  };
+
+  const handleEditMember = async (memberId: number) => {
+    try {
+      const member = await membersApi.get(memberId);
+      setEditMemberData(member);
+      setIsEditMemberOpen(true);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleSuccessAction = () => {
@@ -238,8 +250,19 @@ export const App: React.FC = () => {
         onClose={() => setSelectedMemberDetailId(null)}
         onRecordPayment={handleRecordPaymentForMember}
         onOpenAddPracticeForMember={(mId) => handleOpenAddPractice(mId)}
+        onEditMember={(mId) => handleEditMember(mId)}
         year={year}
         month={month}
+      />
+
+      <EditMemberModal
+        isOpen={isEditMemberOpen}
+        member={editMemberData}
+        onClose={() => {
+          setIsEditMemberOpen(false);
+          setEditMemberData(null);
+        }}
+        onSuccess={handleSuccessAction}
       />
     </div>
   );

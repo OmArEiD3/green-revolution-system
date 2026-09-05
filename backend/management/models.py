@@ -9,7 +9,7 @@ class Member(models.Model):
     STREET_CHOICES = [(i, f"شارع {i}") for i in range(1, 18)]
 
     full_name = models.CharField(max_length=255, verbose_name="الاسم بالكامل", db_index=True)
-    mobile_number = models.CharField(max_length=20, verbose_name="رقم الموبايل", db_index=True)
+    mobile_number = models.CharField(max_length=20, blank=True, verbose_name="رقم الموبايل", db_index=True)
     national_id = models.CharField(max_length=20, blank=True, verbose_name="الرقم القومي", db_index=True)
     street_number = models.IntegerField(
         choices=STREET_CHOICES,
@@ -20,6 +20,7 @@ class Member(models.Model):
     has_guard = models.BooleanField(default=False, verbose_name="يوجد غفير")
     guard_name = models.CharField(max_length=255, blank=True, verbose_name="اسم الغفير")
     guard_mobile = models.CharField(max_length=20, blank=True, verbose_name="موبايل الغفير")
+    guard_mobile_2 = models.CharField(max_length=20, blank=True, verbose_name="موبايل الغفير الثاني")
     is_active = models.BooleanField(default=True, verbose_name="نشط", db_index=True)
     is_deleted = models.BooleanField(default=False, verbose_name="مؤرشف / محذوف", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")

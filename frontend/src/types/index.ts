@@ -15,6 +15,7 @@ export interface Member {
   has_guard: boolean;
   guard_name: string;
   guard_mobile: string;
+  guard_mobile_2: string;
   is_active: boolean;
   is_deleted: boolean;
   practices_count?: number;

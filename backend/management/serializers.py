@@ -79,7 +79,7 @@ class MemberSerializer(serializers.ModelSerializer):
         model = Member
         fields = [
             'id', 'full_name', 'mobile_number', 'national_id',
-            'street_number', 'has_guard', 'guard_name', 'guard_mobile',
+            'street_number', 'has_guard', 'guard_name', 'guard_mobile', 'guard_mobile_2',
             'is_active', 'is_deleted', 'practices_count', 'created_at', 'updated_at'
         ]
 
