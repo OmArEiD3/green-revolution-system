@@ -162,22 +162,43 @@ export const MembersView: React.FC<MembersViewProps> = ({
                 </div>
 
                 {/* Direct Mobile Quick Actions */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <a
-                    href={`tel:${m.mobile_number}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 text-xs font-black transition-colors"
-                  >
-                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="font-mono">{m.mobile_number}</span>
-                  </a>
-
-                  {m.has_guard && (
-                    <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
-                      <Shield className="w-3 h-3 text-emerald-600" />
-                      {m.guard_name ? m.guard_name : 'غفير'}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                  {m.mobile_number ? (
+                    <a
+                      href={`tel:${m.mobile_number}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 text-xs font-black transition-colors"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="font-mono">{m.mobile_number}</span>
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-400 border border-slate-200 text-xs font-bold">
+                      لا يوجد رقم موبايل
                     </span>
                   )}
+
+                  <div className="flex items-center gap-2">
+                    {m.latitude != null && m.longitude != null && (
+                      <a
+                        href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 text-[11px] font-black transition-colors"
+                        title="فتح الموقع على خرائط جوجل"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                      </a>
+                    )}
+
+                    {m.has_guard && (
+                      <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                        <Shield className="w-3 h-3 text-emerald-600" />
+                        {m.guard_name ? m.guard_name : 'غفير'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

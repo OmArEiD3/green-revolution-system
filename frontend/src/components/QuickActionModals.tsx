@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, DollarSign, UserPlus, Receipt, ArrowUpRight, CalendarPlus } from 'lucide-react';
+import { X, Check, DollarSign, UserPlus, Receipt, ArrowUpRight, CalendarPlus, MapPin } from 'lucide-react';
 import { Member, Practice, PracticeType } from '../types';
 import { membersApi, practicesApi, paymentsApi, practiceTypesApi, expensesApi } from '../api/client';
 
@@ -19,10 +19,35 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
   const [guardName, setGuardName] = useState('');
   const [guardMobile, setGuardMobile] = useState('');
   const [guardMobile2, setGuardMobile2] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
+
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('المتصفح لا يدعم تحديد الموقع الجغرافي');
+      return;
+    }
+    setLocating(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude);
+        setLongitude(pos.coords.longitude);
+        setLocating(false);
+      },
+      () => {
+        setLocationError('تعذر الحصول على الموقع. تأكد من تفعيل صلاحية الموقع للمتصفح.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +67,8 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
         guard_name: hasGuard ? guardName : '',
         guard_mobile: hasGuard ? guardMobile : '',
         guard_mobile_2: hasGuard ? guardMobile2 : '',
+        latitude: latitude,
+        longitude: longitude,
       });
       onSuccess();
       onClose();
@@ -168,6 +195,48 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
             )}
           </div>
 
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">الموقع الجغرافي للعقار (اختياري)</label>
+            {latitude !== null && longitude !== null ? (
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-2 text-xs flex-wrap">
+                <span className="font-mono text-emerald-800 font-bold">
+                  📍 {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                </span>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={`https://www.google.com/maps?q=${latitude},${longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-700 font-bold underline"
+                  >
+                    فتح على الخريطة
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLatitude(null);
+                      setLongitude(null);
+                    }}
+                    className="text-rose-600 font-bold"
+                  >
+                    إزالة
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCaptureLocation}
+                disabled={locating}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 text-emerald-800 font-bold text-xs hover:bg-emerald-50 disabled:opacity-60"
+              >
+                <MapPin className="w-4 h-4" />
+                <span>{locating ? 'جاري تحديد موقعك...' : '📍 تحديد الموقع الحالي (قف أمام العقار واضغط هنا)'}</span>
+              </button>
+            )}
+            {locationError && <p className="text-[11px] text-rose-600 font-bold mt-1.5">{locationError}</p>}
+          </div>
+
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
             <button
               type="button"
@@ -205,6 +274,10 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClos
   const [guardName, setGuardName] = useState('');
   const [guardMobile, setGuardMobile] = useState('');
   const [guardMobile2, setGuardMobile2] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -219,11 +292,34 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClos
       setGuardName(member.guard_name || '');
       setGuardMobile(member.guard_mobile || '');
       setGuardMobile2(member.guard_mobile_2 || '');
+      setLatitude(member.latitude !== null && member.latitude !== undefined ? Number(member.latitude) : null);
+      setLongitude(member.longitude !== null && member.longitude !== undefined ? Number(member.longitude) : null);
       setError('');
     }
   }, [member]);
 
   if (!isOpen || !member) return null;
+
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('المتصفح لا يدعم تحديد الموقع الجغرافي');
+      return;
+    }
+    setLocating(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude);
+        setLongitude(pos.coords.longitude);
+        setLocating(false);
+      },
+      () => {
+        setLocationError('تعذر الحصول على الموقع. تأكد من تفعيل صلاحية الموقع للمتصفح.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +339,8 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClos
         guard_name: hasGuard ? guardName : '',
         guard_mobile: hasGuard ? guardMobile : '',
         guard_mobile_2: hasGuard ? guardMobile2 : '',
+        latitude: latitude,
+        longitude: longitude,
       });
       onSuccess();
       onClose();
@@ -367,6 +465,48 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClos
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">الموقع الجغرافي للعقار (اختياري)</label>
+            {latitude !== null && longitude !== null ? (
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-2 text-xs flex-wrap">
+                <span className="font-mono text-emerald-800 font-bold">
+                  📍 {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                </span>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={`https://www.google.com/maps?q=${latitude},${longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-700 font-bold underline"
+                  >
+                    فتح على الخريطة
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLatitude(null);
+                      setLongitude(null);
+                    }}
+                    className="text-rose-600 font-bold"
+                  >
+                    إزالة
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCaptureLocation}
+                disabled={locating}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 text-emerald-800 font-bold text-xs hover:bg-emerald-50 disabled:opacity-60"
+              >
+                <MapPin className="w-4 h-4" />
+                <span>{locating ? 'جاري تحديد موقعك...' : '📍 تحديد الموقع الحالي (قف أمام العقار واضغط هنا)'}</span>
+              </button>
+            )}
+            {locationError && <p className="text-[11px] text-rose-600 font-bold mt-1.5">{locationError}</p>}
           </div>
 
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">

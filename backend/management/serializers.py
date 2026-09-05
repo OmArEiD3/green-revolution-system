@@ -80,6 +80,7 @@ class MemberSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'full_name', 'mobile_number', 'national_id',
             'street_number', 'has_guard', 'guard_name', 'guard_mobile', 'guard_mobile_2',
+            'latitude', 'longitude',
             'is_active', 'is_deleted', 'practices_count', 'created_at', 'updated_at'
         ]
 

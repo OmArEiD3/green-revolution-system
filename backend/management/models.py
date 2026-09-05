@@ -21,6 +21,14 @@ class Member(models.Model):
     guard_name = models.CharField(max_length=255, blank=True, verbose_name="اسم الغفير")
     guard_mobile = models.CharField(max_length=20, blank=True, verbose_name="موبايل الغفير")
     guard_mobile_2 = models.CharField(max_length=20, blank=True, verbose_name="موبايل الغفير الثاني")
+    latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name="خط العرض (الموقع الجغرافي)"
+    )
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name="خط الطول (الموقع الجغرافي)"
+    )
     is_active = models.BooleanField(default=True, verbose_name="نشط", db_index=True)
     is_deleted = models.BooleanField(default=False, verbose_name="مؤرشف / محذوف", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")

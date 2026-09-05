@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil } from 'lucide-react';
+import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin } from 'lucide-react';
 import { MemberStatement } from '../types';
 import { membersApi } from '../api/client';
 
@@ -131,6 +131,25 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                   </a>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Location pill */}
+          {m?.latitude != null && m?.longitude != null && (
+            <div className="mt-3.5 p-2.5 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs shadow-sm">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-emerald-700" />
+                <span className="text-slate-700 font-semibold">موقع العقار محدد</span>
+              </div>
+              <a
+                href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200"
+              >
+                <MapPin className="w-3 h-3" />
+                <span>فتح على خرائط جوجل</span>
+              </a>
             </div>
           )}
         </div>
