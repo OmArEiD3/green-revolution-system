@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.middleware.csrf import get_token
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -29,6 +30,9 @@ class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['get'])
+    def csrf(self, request):
+        return Response({'csrfToken': get_token(request)})
     def login(self, request):
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '').strip()

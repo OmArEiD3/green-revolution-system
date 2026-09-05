@@ -7,17 +7,53 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
-  // Django's CSRF protection expects the token from the "csrftoken" cookie
-  // to be echoed back in an "X-CSRFToken" header on unsafe requests
-  // (POST/PATCH/PUT/DELETE). Axios reads/sends this automatically once
-  // these two options are set.
-  xsrfCookieName: 'csrftoken',
-  xsrfHeaderName: 'X-CSRFToken',
 });
+
+// --- CSRF handling ---
+// When the frontend and backend share the same site, axios can read the
+// "csrftoken" cookie directly and echo it back automatically. But when they
+// are on different domains (e.g. a Vercel frontend calling a PythonAnywhere
+// backend), browsers never expose one site's cookies to another site's
+// JavaScript -- so that automatic cookie-reading approach silently does
+// nothing there. Instead, we fetch the token from a small JSON endpoint
+// (readable cross-origin, since it's a normal response body) and attach it
+// to every unsafe request ourselves.
+let csrfToken: string | null = null;
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (csrfToken) return csrfToken;
+  try {
+    const res = await api.get('/auth/csrf/');
+    csrfToken = res.data.csrfToken;
+  } catch {
+    csrfToken = null;
+  }
+  return csrfToken;
+}
+
+const UNSAFE_METHODS = ['post', 'put', 'patch', 'delete'];
+
+api.interceptors.request.use(async (config) => {
+  if (config.method && UNSAFE_METHODS.includes(config.method.toLowerCase())) {
+    const token = await ensureCsrfToken();
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers['X-CSRFToken'] = token;
+    }
+  }
+  return config;
+});
+
+// The CSRF token rotates on login/logout (Django does this deliberately to
+// prevent session fixation), so force a refetch right after either happens.
+function resetCsrfToken() {
+  csrfToken = null;
+}
 
 export const authApi = {
   login: async (username: string, password: string) => {
     const res = await api.post('/auth/login/', { username, password });
+    resetCsrfToken();
     return res.data;
   },
   me: async () => {
@@ -26,6 +62,7 @@ export const authApi = {
   },
   logout: async () => {
     const res = await api.post('/auth/logout/');
+    resetCsrfToken();
     return res.data;
   },
 };
