@@ -9,9 +9,9 @@ import { FinancialsView } from './components/FinancialsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { LoginView } from './components/LoginView';
-import { AddMemberModal, EditMemberModal, AddPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/QuickActionModals';
+import { AddMemberModal, EditMemberModal, AddPracticeModal, EditPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/QuickActionModals';
 import { MemberDetailModal } from './components/MemberDetailModal';
-import { User, Member } from './types';
+import { User, Member, Practice } from './types';
 import { authApi, membersApi } from './api/client';
 
 export const App: React.FC = () => {
@@ -36,6 +36,8 @@ export const App: React.FC = () => {
   const [selectedMemberDetailId, setSelectedMemberDetailId] = useState<number | null>(null);
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
   const [editMemberData, setEditMemberData] = useState<Member | null>(null);
+  const [isEditPracticeOpen, setIsEditPracticeOpen] = useState(false);
+  const [editPracticeData, setEditPracticeData] = useState<Practice | null>(null);
 
   // Refresh trigger for views after actions
   const [refreshKey, setRefreshKey] = useState(0);
@@ -168,6 +170,10 @@ export const App: React.FC = () => {
             onRecordPayment={handleRecordPaymentForMember}
             onOpenAddPractice={() => handleOpenAddPractice()}
             onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
+            onEditPractice={(practice) => {
+              setEditPracticeData(practice);
+              setIsEditPracticeOpen(true);
+            }}
           />
         )}
 
@@ -251,6 +257,10 @@ export const App: React.FC = () => {
         onRecordPayment={handleRecordPaymentForMember}
         onOpenAddPracticeForMember={(mId) => handleOpenAddPractice(mId)}
         onEditMember={(mId) => handleEditMember(mId)}
+        onEditPractice={(practice) => {
+          setEditPracticeData(practice);
+          setIsEditPracticeOpen(true);
+        }}
         year={year}
         month={month}
       />
@@ -261,6 +271,16 @@ export const App: React.FC = () => {
         onClose={() => {
           setIsEditMemberOpen(false);
           setEditMemberData(null);
+        }}
+        onSuccess={handleSuccessAction}
+      />
+
+      <EditPracticeModal
+        isOpen={isEditPracticeOpen}
+        practice={editPracticeData}
+        onClose={() => {
+          setIsEditPracticeOpen(false);
+          setEditPracticeData(null);
         }}
         onSuccess={handleSuccessAction}
       />

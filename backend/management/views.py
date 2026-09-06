@@ -217,6 +217,57 @@ class PracticeViewSet(viewsets.ModelViewSet):
             }
         )
 
+    def perform_update(self, serializer):
+        old = serializer.instance
+        old_values = {
+            'required_amount': str(old.required_amount),
+            'year': old.year,
+            'month': old.month,
+            'notes': old.notes,
+        }
+        practice = serializer.save()
+        # Keep the linked receipt's amount in sync with any edited required_amount
+        FinancialService.ensure_practice_receipt(practice)
+        # Refresh so the response reflects the just-synced receipt amount,
+        # not a stale cached copy from before the sync.
+        practice.refresh_from_db()
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action='PRACTICE_UPDATED',
+            entity_name='Practice',
+            entity_id=practice.id,
+            old_values=old_values,
+            new_values={
+                'required_amount': str(practice.required_amount),
+                'year': practice.year,
+                'month': practice.month,
+                'notes': practice.notes,
+            }
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        practice = self.get_object()
+        if practice.total_paid > 0:
+            return Response(
+                {'error': 'لا يمكن حذف هذه الممارسة لوجود دفعات مسجلة عليها بالفعل. يرجى إلغاء الدفعات أولاً من شاشة التحصيل ثم إعادة المحاولة.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        practice.is_deleted = True
+        practice.save(update_fields=['is_deleted'])
+        AuditLog.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            action='PRACTICE_DELETED',
+            entity_name='Practice',
+            entity_id=practice.id,
+            old_values={
+                'member_id': practice.member_id,
+                'required_amount': str(practice.required_amount),
+                'year': practice.year,
+                'month': practice.month,
+            }
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=False, methods=['post'])
     def bulk_create_month(self, request):
         """

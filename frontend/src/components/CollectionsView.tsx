@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Search, CheckCircle2, MapPin, CalendarPlus } from 'lucide-react';
+import { DollarSign, Search, CheckCircle2, MapPin, CalendarPlus, Pencil } from 'lucide-react';
 import { Practice } from '../types';
 import { practicesApi } from '../api/client';
 
@@ -9,6 +9,7 @@ interface CollectionsViewProps {
   onRecordPayment: (practiceId: number, memberId: number) => void;
   onOpenAddPractice: () => void;
   onSelectMember: (memberId: number) => void;
+  onEditPractice?: (practice: Practice) => void;
 }
 
 export const CollectionsView: React.FC<CollectionsViewProps> = ({
@@ -17,6 +18,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
   onRecordPayment,
   onOpenAddPractice,
   onSelectMember,
+  onEditPractice,
 }) => {
   const [practices, setPractices] = useState<Practice[]>([]);
   const [streetFilter, setStreetFilter] = useState<number | string>('');
@@ -175,15 +177,26 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                     </div>
                   </div>
 
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-black ${
-                      p.payment_status === 'FULLY_PAID'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
-                    }`}
-                  >
-                    {p.payment_status === 'FULLY_PAID' ? '✓ مسدد' : 'غير مسدد'}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {onEditPractice && (
+                      <button
+                        onClick={() => onEditPractice(p)}
+                        className="p-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 transition-colors"
+                        title="تعديل الممارسة"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-black ${
+                        p.payment_status === 'FULLY_PAID'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {p.payment_status === 'FULLY_PAID' ? '✓ مسدد' : 'غير مسدد'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Amounts Breakdown */}

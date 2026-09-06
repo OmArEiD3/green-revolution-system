@@ -114,6 +114,14 @@ export const practicesApi = {
     const res = await api.post('/practices/bulk_create_month/', data);
     return res.data;
   },
+  update: async (id: number, data: { practice_type?: number; year?: number; month?: number; required_amount?: number | string; notes?: string }) => {
+    const res = await api.patch(`/practices/${id}/`, data);
+    return res.data;
+  },
+  delete: async (id: number) => {
+    const res = await api.delete(`/practices/${id}/`);
+    return res.data;
+  },
 };
 
 export const paymentsApi = {

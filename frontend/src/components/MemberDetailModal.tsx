@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin } from 'lucide-react';
-import { MemberStatement } from '../types';
+import { MemberStatement, Practice } from '../types';
 import { membersApi } from '../api/client';
 
 interface MemberDetailModalProps {
@@ -10,6 +10,7 @@ interface MemberDetailModalProps {
   onRecordPayment: (practiceId: number, memberId: number) => void;
   onOpenAddPracticeForMember?: (memberId: number) => void;
   onEditMember?: (memberId: number) => void;
+  onEditPractice?: (practice: Practice) => void;
   year: number;
   month: number;
 }
@@ -21,6 +22,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onRecordPayment,
   onOpenAddPracticeForMember,
   onEditMember,
+  onEditPractice,
   year,
   month,
 }) => {
@@ -270,15 +272,26 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                               <span className="font-black text-sm text-slate-900">{p.practice_type_name}</span>
                               <span className="text-xs text-slate-500 block mt-0.5">شهر {p.month} / {p.year}</span>
                             </div>
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-black ${
-                                p.payment_status === 'FULLY_PAID'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-rose-100 text-rose-800'
-                              }`}
-                            >
-                              {p.payment_status === 'FULLY_PAID' ? '✓ مسدد' : 'غير مسدد'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {onEditPractice && (
+                                <button
+                                  onClick={() => onEditPractice(p)}
+                                  className="p-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 transition-colors"
+                                  title="تعديل الممارسة"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-black ${
+                                  p.payment_status === 'FULLY_PAID'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}
+                              >
+                                {p.payment_status === 'FULLY_PAID' ? '✓ مسدد' : 'غير مسدد'}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl text-center text-xs">
