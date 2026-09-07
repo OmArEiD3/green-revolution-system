@@ -554,8 +554,9 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
   const [selectedMonth, setSelectedMonth] = useState<number>(month);
   const [selectedYear, setSelectedYear] = useState<number>(year);
   const [selectedTypeId, setSelectedTypeId] = useState<number | string>('');
-  const [requiredAmount, setRequiredAmount] = useState<string>('560');
+  const [requiredAmount, setRequiredAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [showMemberResults, setShowMemberResults] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -567,6 +568,10 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
           setPracticeTypes(ptList);
           if (ptList.length > 0 && !selectedTypeId) {
             setSelectedTypeId(ptList[0].id);
+          }
+          if (initialMemberId) {
+            const preselected = mList.find((m: Member) => m.id === initialMemberId);
+            if (preselected) setMemberSearch(preselected.full_name);
           }
         })
         .catch(console.error);
@@ -657,27 +662,65 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4 text-right">
           {/* Step 1: Member Selection */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-bold text-slate-700 mb-1.5">1. اختيار العضو *</label>
             <input
               type="text"
               value={memberSearch}
-              onChange={(e) => setMemberSearch(e.target.value)}
+              onChange={(e) => {
+                setMemberSearch(e.target.value);
+                setSelectedMemberId('');
+                setShowMemberResults(true);
+              }}
+              onFocus={() => setShowMemberResults(true)}
               placeholder="ابحث بالاسم أو رقم الشارع أو الموبايل..."
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-xs font-semibold mb-2"
+              autoComplete="off"
+              className="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-sm font-semibold"
             />
-            <select
-              value={selectedMemberId}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-sm font-bold bg-white"
-            >
-              <option value="">-- اختر العضو من القائمة ({filteredMembers.length}) --</option>
-              {filteredMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.full_name} (شارع {m.street_number})
-                </option>
-              ))}
-            </select>
+
+            {selectedMemberId ? (
+              <div className="mt-2 p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-800">
+                  ✓ {members.find((m) => String(m.id) === String(selectedMemberId))?.full_name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMemberId('');
+                    setMemberSearch('');
+                    setShowMemberResults(true);
+                  }}
+                  className="text-[11px] font-bold text-slate-500 hover:text-rose-600"
+                >
+                  تغيير
+                </button>
+              </div>
+            ) : (
+              showMemberResults &&
+              memberSearch.trim() && (
+                <div className="mt-1.5 max-h-52 overflow-y-auto rounded-2xl border border-slate-200 shadow-lg bg-white divide-y divide-slate-100 absolute z-10 w-full">
+                  {filteredMembers.length > 0 ? (
+                    filteredMembers.slice(0, 20).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMemberId(m.id);
+                          setMemberSearch(m.full_name);
+                          setShowMemberResults(false);
+                        }}
+                        className="w-full text-right px-4 py-2.5 hover:bg-emerald-50 text-xs font-bold text-slate-800 flex items-center justify-between"
+                      >
+                        <span>{m.full_name}</span>
+                        <span className="text-slate-400 font-mono">شارع {m.street_number}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-xs text-slate-400 font-semibold">لا يوجد أعضاء مطابقين</div>
+                  )}
+                </div>
+              )
+            )}
           </div>
 
           {/* Step 2: Month & Year */}
