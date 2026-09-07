@@ -26,6 +26,29 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const resetForm = () => {
+    setFullName('');
+    setMobileNumber('');
+    setNationalId('');
+    setStreetNumber(1);
+    setHasGuard(false);
+    setGuardName('');
+    setGuardMobile('');
+    setGuardMobile2('');
+    setLatitude(null);
+    setLongitude(null);
+    setLocationError('');
+    setError('');
+  };
+
+  // Always start from a clean, empty form whenever this modal is opened,
+  // so a previously-added member's data never lingers into the next one.
+  useEffect(() => {
+    if (isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleCaptureLocation = () => {
@@ -562,14 +585,27 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      // Start every fresh "add practice" session with a clean form so a
+      // previously-entered amount/notes/member never lingers into the next one.
+      setRequiredAmount('');
+      setNotes('');
+      setError('');
+      setSelectedMonth(month);
+      setSelectedYear(year);
+      setShowMemberResults(false);
+      if (!initialMemberId) {
+        setSelectedMemberId('');
+        setMemberSearch('');
+      }
       Promise.all([membersApi.list(), practiceTypesApi.list()])
         .then(([mList, ptList]) => {
           setMembers(mList);
           setPracticeTypes(ptList);
-          if (ptList.length > 0 && !selectedTypeId) {
+          if (ptList.length > 0) {
             setSelectedTypeId(ptList[0].id);
           }
           if (initialMemberId) {
+            setSelectedMemberId(initialMemberId);
             const preselected = mList.find((m: Member) => m.id === initialMemberId);
             if (preselected) setMemberSearch(preselected.full_name);
           }
@@ -577,12 +613,6 @@ export const AddPracticeModal: React.FC<AddPracticeModalProps> = ({
         .catch(console.error);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (initialMemberId) setSelectedMemberId(initialMemberId);
-    setSelectedMonth(month);
-    setSelectedYear(year);
-  }, [initialMemberId, month, year]);
 
   if (!isOpen) return null;
 
@@ -1088,6 +1118,10 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setNotes('');
+      setPaymentMethod('CASH');
+      setPaymentDate(new Date().toISOString().split('T')[0]);
+      setError('');
       membersApi.list().then(setMembers).catch(console.error);
     }
   }, [isOpen]);
@@ -1320,6 +1354,20 @@ export const AddExpenseModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onS
   const [documentImage, setDocumentImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Always start from a clean, empty form whenever this modal is opened,
+  // so a previously-added expense's data never lingers into the next one.
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setAmount('');
+      setExpenseDate(new Date().toISOString().split('T')[0]);
+      setPaymentMethod('CASH');
+      setDescription('');
+      setDocumentImage(null);
+      setError('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
