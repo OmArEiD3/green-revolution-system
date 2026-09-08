@@ -257,6 +257,7 @@ export const App: React.FC = () => {
         onRecordPayment={handleRecordPaymentForMember}
         onOpenAddPracticeForMember={(mId) => handleOpenAddPractice(mId)}
         onEditMember={(mId) => handleEditMember(mId)}
+        onMemberDeleted={handleSuccessAction}
         onEditPractice={(practice) => {
           setEditPracticeData(practice);
           setIsEditPracticeOpen(true);

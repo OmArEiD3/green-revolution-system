@@ -204,6 +204,19 @@ export const reportsApi = {
     const base = `${apiBase}/reports/export_excel/?year=${year}&month=${month}`;
     return street ? `${base}&street=${street}` : base;
   },
+  backupExportUrl: () => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+    return `${apiBase}/reports/backup_export/`;
+  },
+  backupRestore: async (file: File, confirmPhrase: string) => {
+    const formData = new FormData();
+    formData.append('backup_file', file);
+    formData.append('confirm_phrase', confirmPhrase);
+    const res = await api.post('/reports/backup_restore/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
 };
 
 export const auditLogsApi = {

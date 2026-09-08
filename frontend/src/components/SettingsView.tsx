@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, Database, Download, History, CheckCircle2 } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Database, Download, History, CheckCircle2, Upload, AlertTriangle } from 'lucide-react';
 import { auditLogsApi, reportsApi } from '../api/client';
 
 export const SettingsView: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRestorePanel, setShowRestorePanel] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState('');
+  const [restoreSuccess, setRestoreSuccess] = useState('');
 
   useEffect(() => {
     auditLogsApi
@@ -13,6 +19,47 @@ export const SettingsView: React.FC = () => {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const REQUIRED_PHRASE = 'نعم متأكد';
+
+  const handleRestore = async () => {
+    if (!restoreFile) {
+      setRestoreError('يرجى اختيار ملف النسخة الاحتياطية أولاً');
+      return;
+    }
+    if (confirmPhrase.trim() !== REQUIRED_PHRASE) {
+      setRestoreError(`يجب كتابة العبارة "${REQUIRED_PHRASE}" بالضبط للمتابعة`);
+      return;
+    }
+    setRestoring(true);
+    setRestoreError('');
+    try {
+      const res = await reportsApi.backupRestore(restoreFile, confirmPhrase.trim());
+      // Offer the automatic pre-restore safety snapshot as a download,
+      // so the admin has a local copy of what existed right before this.
+      if (res.safety_snapshot) {
+        const blob = new Blob([res.safety_snapshot], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = res.safety_snapshot_filename || 'safety_snapshot.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      setRestoreSuccess(res.message);
+      setRestoreFile(null);
+      setConfirmPhrase('');
+      // A restore replaces literally all data, so the safest way to make
+      // every screen in the app reflect the new state is a full reload.
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (err: any) {
+      setRestoreError(err.response?.data?.error || 'حدث خطأ أثناء الاستعادة');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   return (
     <div className="space-y-4 animate-slide-up">
@@ -69,11 +116,11 @@ export const SettingsView: React.FC = () => {
               <span>النسخ الاحتياطي والأمان المالي</span>
             </div>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed font-medium">
-              يتم حفظ وتوثيق جميع السجلات المالية إلى أجل غير مسمى. يمكنك تنزيل كشوف Excel الشاملة للنسخ الاحتياطي والأرشفة بنقرة واحدة.
+              يتم حفظ وتوثيق جميع السجلات المالية إلى أجل غير مسمى. ننصح بتنزيل نسخة احتياطية كاملة بشكل دوري وحفظها في مكان آمن (Google Drive مثلاً).
             </p>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-2.5">
             <button
               onClick={() => {
                 const now = new Date();
@@ -82,8 +129,79 @@ export const SettingsView: React.FC = () => {
               className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
             >
               <Download className="w-4 h-4" />
-              <span>تنزيل نسخة احتياطية لكافة البيانات (.xlsx)</span>
+              <span>تنزيل كشف الشهر الحالي (.xlsx)</span>
             </button>
+
+            <button
+              onClick={() => window.open(reportsApi.backupExportUrl(), '_blank')}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>تنزيل نسخة احتياطية كاملة لكل البيانات (.json)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowRestorePanel((v) => !v);
+                setRestoreError('');
+                setRestoreSuccess('');
+              }}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-rose-200 hover:bg-rose-50 text-rose-700 font-black text-xs sm:text-sm transition-all active:scale-95"
+            >
+              <Upload className="w-4 h-4" />
+              <span>استعادة نسخة احتياطية</span>
+            </button>
+
+            {showRestorePanel && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-3 animate-slide-up">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-bold text-rose-800 leading-relaxed">
+                    تحذير: هذه العملية تستبدل كل البيانات الحالية (كل الأعضاء، الممارسات، الدفعات) بمحتوى الملف اللي هترفعه.
+                    أي بيانات اتضافت بعد تاريخ النسخة دي هتضيع نهائياً. النظام هيحمّلك تلقائياً نسخة أمان من البيانات
+                    الحالية قبل ما يبدأ، لكن لازم تتأكد إنك رافع الملف الصح قبل ما تكمل.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">اختر ملف النسخة الاحتياطية (.json)</label>
+                  <input
+                    type="file"
+                    accept="application/json"
+                    onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                    className="w-full text-[11px] file:ml-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-rose-100 file:text-rose-800 file:font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    اكتب "{REQUIRED_PHRASE}" بالضبط للتأكيد
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmPhrase}
+                    onChange={(e) => setConfirmPhrase(e.target.value)}
+                    placeholder={REQUIRED_PHRASE}
+                    className="w-full px-3 py-2 rounded-xl border border-rose-300 text-xs font-bold outline-none focus:ring-4 focus:ring-rose-500/15"
+                  />
+                </div>
+
+                {restoreError && <p className="text-[11px] font-bold text-rose-900">{restoreError}</p>}
+                {restoreSuccess && (
+                  <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                    ✓ {restoreSuccess} — سيتم تحديث الصفحة تلقائياً الآن...
+                  </p>
+                )}
+
+                <button
+                  onClick={handleRestore}
+                  disabled={restoring || confirmPhrase.trim() !== REQUIRED_PHRASE || !restoreFile}
+                  className="w-full px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {restoring ? 'جاري الاستعادة...' : 'تأكيد الاستعادة نهائياً'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

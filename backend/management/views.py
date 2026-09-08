@@ -1,13 +1,16 @@
 import io
+import json
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum, Count, Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
+from django.core import serializers as django_serializers
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
@@ -678,3 +681,86 @@ class ReportViewSet(viewsets.ViewSet):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+    # Models are listed in FK-dependency-safe order: parents before children.
+    # Backup restore/wipe operations must respect this order (insert in this
+    # order, delete in reverse) to avoid foreign-key errors.
+    BACKUP_MODELS_ORDER = [
+        Member, PracticeType, Practice, Payment, Receipt, Expense,
+        FinancialTransaction, AuditLog,
+    ]
+
+    @action(detail=False, methods=['get'])
+    def backup_export(self, request):
+        """Download a full JSON backup of all data (excludes Django's own
+        auth/session tables for security - no password hashes in this file)."""
+        all_objects = []
+        for model in self.BACKUP_MODELS_ORDER:
+            all_objects.extend(model.objects.all())
+
+        data = django_serializers.serialize('json', all_objects, indent=2)
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+        response = HttpResponse(data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="green_revolution_backup_{timestamp}.json"'
+        return response
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def backup_restore(self, request):
+        """Replace ALL current data with the contents of an uploaded backup
+        file. Extremely destructive by design - protected by a required
+        confirmation phrase, and an automatic safety snapshot of the current
+        data taken right before anything is deleted."""
+        CONFIRM_PHRASE = 'نعم متأكد'
+        if request.data.get('confirm_phrase', '').strip() != CONFIRM_PHRASE:
+            return Response(
+                {'error': f'يجب كتابة عبارة التأكيد "{CONFIRM_PHRASE}" بالضبط للمتابعة، ولم تتم أي عملية.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        uploaded_file = request.FILES.get('backup_file')
+        if not uploaded_file:
+            return Response({'error': 'يرجى اختيار ملف النسخة الاحتياطية (JSON) أولاً.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content = uploaded_file.read().decode('utf-8')
+            deserialized_objects = list(django_serializers.deserialize('json', content))
+            if not deserialized_objects:
+                return Response({'error': 'الملف فارغ أو لا يحتوي على بيانات صالحة.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f'ملف النسخة الاحتياطية غير صالح أو تالف: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Automatic safety net: snapshot the CURRENT data before wiping
+        # anything, in case the wrong file was uploaded by mistake.
+        safety_objects = []
+        for model in self.BACKUP_MODELS_ORDER:
+            safety_objects.extend(model.objects.all())
+        safety_snapshot = django_serializers.serialize('json', safety_objects, indent=2)
+
+        try:
+            with transaction.atomic():
+                for model in reversed(self.BACKUP_MODELS_ORDER):
+                    model.objects.all().delete()
+                for obj in deserialized_objects:
+                    obj.save()
+        except Exception as e:
+            # transaction.atomic() has already rolled back any partial
+            # changes at this point - the original data is intact.
+            return Response(
+                {'error': f'فشلت عملية الاستعادة وتم التراجع تلقائياً؛ بياناتك الأصلية سليمة ولم تتأثر. سبب الفشل: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        AuditLog.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            action='DATA_RESTORED',
+            entity_name='System',
+            new_values={'objects_restored': len(deserialized_objects)}
+        )
+
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+        return JsonResponse({
+            'success': True,
+            'message': f'تم استعادة {len(deserialized_objects)} سجل بنجاح من النسخة الاحتياطية.',
+            'safety_snapshot': safety_snapshot,
+            'safety_snapshot_filename': f'green_revolution_SAFETY_before_restore_{timestamp}.json',
+        })

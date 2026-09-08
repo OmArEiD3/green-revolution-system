@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Home, Users, MapPin, DollarSign, ReceiptText,
-  ShieldCheck, MoreHorizontal, LogOut, Calendar, Sparkles
+  ShieldCheck, MoreHorizontal, LogOut, Calendar, Sparkles, Settings
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -49,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'receipts', label: 'الإيصالات', icon: ReceiptText },
     { id: 'financials', label: 'الماليات', icon: ShieldCheck },
     { id: 'reports', label: 'التقارير', icon: MoreHorizontal },
+    { id: 'settings', label: 'الإعدادات', icon: Settings },
   ];
 
   return (
@@ -160,11 +161,12 @@ export const BottomNav: React.FC<{
     { id: 'collections', label: 'التحصيل', icon: DollarSign },
     { id: 'receipts', label: 'الإيصالات', icon: ReceiptText },
     { id: 'financials', label: 'الماليات', icon: MoreHorizontal },
+    { id: 'settings', label: 'الإعدادات', icon: Settings },
   ];
 
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 glass-bottom-nav shadow-2xl pb-safe">
-      <div className="grid grid-cols-6 h-16 max-w-md mx-auto">
+      <div className="grid grid-cols-7 h-16 max-w-md mx-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin } from 'lucide-react';
+import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin, Trash2 } from 'lucide-react';
 import { MemberStatement, Practice } from '../types';
 import { membersApi } from '../api/client';
 
@@ -11,6 +11,7 @@ interface MemberDetailModalProps {
   onOpenAddPracticeForMember?: (memberId: number) => void;
   onEditMember?: (memberId: number) => void;
   onEditPractice?: (practice: Practice) => void;
+  onMemberDeleted?: () => void;
   year: number;
   month: number;
 }
@@ -23,16 +24,22 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onOpenAddPracticeForMember,
   onEditMember,
   onEditPractice,
+  onMemberDeleted,
   year,
   month,
 }) => {
   const [statement, setStatement] = useState<MemberStatement | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'current' | 'history' | 'payments' | 'receipts'>('current');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (isOpen && memberId) {
       setLoading(true);
+      setConfirmingDelete(false);
+      setDeleteError('');
       membersApi
         .statement(memberId, year, month)
         .then(setStatement)
@@ -45,6 +52,24 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
 
   const m = statement?.member;
   const summary = statement?.summary;
+
+  const handleDeleteMember = async () => {
+    if (!memberId) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await membersApi.delete(memberId);
+      onClose();
+      if (onMemberDeleted) onMemberDeleted();
+      // Let the parent screen know what actually happened (full delete vs archive)
+      if (res?.message) {
+        window.alert(res.message);
+      }
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'حدث خطأ أثناء حذف العضو');
+      setDeleting(false);
+    }
+  };
 
   const monthNames = [
     '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -96,6 +121,13 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 </button>
               )}
               <button
+                onClick={() => setConfirmingDelete(true)}
+                className="p-2 rounded-2xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 transition-colors shadow-sm"
+                title="حذف العضو"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
                 onClick={onClose}
                 className="p-2 rounded-2xl bg-white hover:bg-slate-200 text-slate-400 hover:text-slate-700 border border-slate-200 transition-colors shadow-sm"
               >
@@ -103,6 +135,35 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               </button>
             </div>
           </div>
+
+          {confirmingDelete && (
+            <div className="mt-3.5 p-3.5 bg-rose-50 rounded-2xl border border-rose-200 animate-slide-up">
+              <p className="text-xs font-black text-rose-800 mb-1">⚠️ تأكيد حذف العضو "{m?.full_name}"</p>
+              <p className="text-[11px] text-rose-700 font-semibold mb-3 leading-relaxed">
+                لو العضو معاهوش أي دفعات أو ممارسات مسجلة، هيتم حذفه نهائياً. لو معاه سجل مالي سابق، النظام هيحتفظ ببياناته
+                المالية تلقائياً ويخفيه بس من القوائم (أرشفة) عشان يحمي السجلات المحاسبية.
+              </p>
+              {deleteError && <p className="text-[11px] font-bold text-rose-900 mb-2">{deleteError}</p>}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDeleteMember}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs disabled:opacity-50"
+                >
+                  {deleting ? 'جاري الحذف...' : 'نعم، متأكد من الحذف'}
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteError('');
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white"
+                >
+                  تراجع
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Guard details pill */}
           {m?.has_guard && (
