@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Member, Receipt, DashboardData, StreetData, MemberStatement } from '../types';
+import { Member, Receipt, Practice, PracticeType, DashboardData, StreetData, MemberStatement } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -50,6 +50,27 @@ function resetCsrfToken() {
   csrfToken = null;
 }
 
+// The backend paginates list endpoints (50 items per page by default).
+// A plain "return res.data.results" only ever returns page 1, which silently
+// cuts off any list once it grows past the page size (e.g. members, practices,
+// payments). This helper follows the "next" link until every page has been
+// fetched, so callers always get the complete, real list.
+async function fetchAllPages<T>(url: string, params?: Record<string, any>): Promise<T[]> {
+  let results: T[] = [];
+  let page = 1;
+  while (true) {
+    const res = await api.get(url, { params: { ...params, page } });
+    if (!res.data || res.data.results === undefined) {
+      // Not a paginated response (e.g. a plain array) - return as-is.
+      return res.data;
+    }
+    results = results.concat(res.data.results);
+    if (!res.data.next) break;
+    page += 1;
+  }
+  return results;
+}
+
 export const authApi = {
   login: async (username: string, password: string) => {
     const res = await api.post('/auth/login/', { username, password });
@@ -69,8 +90,7 @@ export const authApi = {
 
 export const membersApi = {
   list: async (params?: { street?: number | string; search?: string; is_active?: boolean }) => {
-    const res = await api.get('/members/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<Member>('/members/', params);
   },
   get: async (id: number) => {
     const res = await api.get(`/members/${id}/`);
@@ -96,15 +116,13 @@ export const membersApi = {
 
 export const practiceTypesApi = {
   list: async () => {
-    const res = await api.get('/practice-types/');
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<PracticeType>('/practice-types/');
   },
 };
 
 export const practicesApi = {
   list: async (params?: { year?: number; month?: number; street?: number; member_id?: number; search?: string }) => {
-    const res = await api.get('/practices/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<Practice>('/practices/', params);
   },
   create: async (data: { member: number; practice_type: number; year: number; month: number; required_amount: number | string; notes?: string }) => {
     const res = await api.post('/practices/', data);
@@ -126,8 +144,7 @@ export const practicesApi = {
 
 export const paymentsApi = {
   list: async (params?: { member_id?: number; practice_id?: number; street?: number }) => {
-    const res = await api.get('/payments/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<any>('/payments/', params);
   },
   create: async (data: { practice: number; amount: number | string; payment_date?: string; payment_method: string; notes?: string }) => {
     const res = await api.post('/payments/', data);
@@ -141,8 +158,7 @@ export const paymentsApi = {
 
 export const receiptsApi = {
   list: async (params?: { status?: string; year?: number; month?: number; street?: number; search?: string }) => {
-    const res = await api.get('/receipts/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<Receipt>('/receipts/', params);
   },
   update: async (id: number, data: Partial<Receipt>) => {
     const res = await api.patch(`/receipts/${id}/`, data);
@@ -168,8 +184,7 @@ export const receiptsApi = {
 
 export const expensesApi = {
   list: async (params?: { year?: number; month?: number }) => {
-    const res = await api.get('/expenses/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<any>('/expenses/', params);
   },
   create: async (formData: FormData) => {
     const res = await api.post('/expenses/', formData, {
@@ -181,8 +196,7 @@ export const expensesApi = {
 
 export const financialApi = {
   transactions: async (params?: { type?: string; year?: number; month?: number; member_id?: number }) => {
-    const res = await api.get('/financial-transactions/', { params });
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<any>('/financial-transactions/', params);
   },
   recordManualOverpayment: async (data: { amount: number | string; source_name: string; payment_method: string; description?: string; transaction_date?: string }) => {
     const res = await api.post('/financial-transactions/record_manual_overpayment/', data);
@@ -221,8 +235,7 @@ export const reportsApi = {
 
 export const auditLogsApi = {
   list: async () => {
-    const res = await api.get('/audit-logs/');
-    return res.data.results ? res.data.results : res.data;
+    return fetchAllPages<any>('/audit-logs/');
   },
 };
 
