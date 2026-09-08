@@ -54,15 +54,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 glass-nav shadow-lg transition-all">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-2 min-h-16 sm:min-h-18 py-2">          {/* Brand Logo & Area Identity */}
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-1.5 min-h-16 sm:min-h-18 py-2">          {/* Brand Logo & Area Identity */}
           <div
             onClick={() => setActiveTab('dashboard')}
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group"
           >
             <div className="relative">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-900/40 border border-emerald-300/30 group-hover:scale-105 transition-transform duration-300">
-                <span className="text-2xl drop-shadow">🌱</span>
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-900/40 border border-emerald-300/30 group-hover:scale-105 transition-transform duration-300">
+                <span className="text-xl sm:text-2xl drop-shadow">🌱</span>
               </div>
               <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-emerald-900 flex items-center justify-center">
                 <Sparkles className="w-2.5 h-2.5 text-emerald-950" />
@@ -104,9 +104,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Period Selector & Engineer Quick Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Year / Month Selector Pill */}
-            <div className="flex items-center bg-emerald-950/70 hover:bg-emerald-950 rounded-2xl px-2.5 py-1.5 border border-emerald-700/50 shadow-inner transition-colors">
+            <div className="flex items-center bg-emerald-950/70 hover:bg-emerald-950 rounded-2xl px-1.5 sm:px-2.5 py-1.5 border border-emerald-700/50 shadow-inner transition-colors">
               <Calendar className="w-3.5 h-3.5 text-emerald-400 ml-1.5 hidden sm:inline" />
               <select
                 value={month}
@@ -138,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onLogout}
                 title="تسجيل الخروج"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-950/70 hover:bg-rose-600/90 text-emerald-300 hover:text-white flex items-center justify-center border border-emerald-700/50 hover:border-rose-500 transition-all duration-200 shadow-inner"
+                className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-2xl bg-emerald-950/70 hover:bg-rose-600/90 text-emerald-300 hover:text-white flex items-center justify-center border border-emerald-700/50 hover:border-rose-500 transition-all duration-200 shadow-inner"
               >
                 <LogOut className="w-4 h-4" />
               </button>
