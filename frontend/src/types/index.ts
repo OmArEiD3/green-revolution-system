@@ -8,6 +8,7 @@ export interface User {
 
 export interface Member {
   id: number;
+  member_type: 'RESIDENTIAL' | 'COMMERCIAL';
   full_name: string;
   mobile_number: string;
   national_id: string;

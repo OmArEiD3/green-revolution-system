@@ -7,7 +7,15 @@ from django.db.models import Sum, Q
 
 class Member(models.Model):
     STREET_CHOICES = [(i, f"شارع {i}") for i in range(1, 18)]
+    MEMBER_TYPE_CHOICES = [
+        ('RESIDENTIAL', 'سكني'),
+        ('COMMERCIAL', 'تجاري'),
+    ]
 
+    member_type = models.CharField(
+        max_length=20, choices=MEMBER_TYPE_CHOICES, default='RESIDENTIAL',
+        db_index=True, verbose_name="نوع العضوية"
+    )
     full_name = models.CharField(max_length=255, verbose_name="الاسم بالكامل", db_index=True)
     mobile_number = models.CharField(max_length=20, blank=True, verbose_name="رقم الموبايل", db_index=True)
     national_id = models.CharField(max_length=20, blank=True, verbose_name="الرقم القومي", db_index=True)

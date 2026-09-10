@@ -93,6 +93,18 @@ class MemberViewSet(viewsets.ModelViewSet):
         street = self.request.query_params.get('street')
         is_active = self.request.query_params.get('is_active')
         search_query = self.request.query_params.get('search')
+        member_type = self.request.query_params.get('member_type')
+
+        # Default to residential-only so every existing screen (dashboard,
+        # collections, practices, reports, ...) keeps behaving exactly as
+        # before and never mixes in commercial entities unless explicitly
+        # asked for via ?member_type=COMMERCIAL (or 'ALL' for everyone).
+        if member_type == 'ALL':
+            pass
+        elif member_type in ('RESIDENTIAL', 'COMMERCIAL'):
+            qs = qs.filter(member_type=member_type)
+        else:
+            qs = qs.filter(member_type='RESIDENTIAL')
 
         if street:
             qs = qs.filter(street_number=street)

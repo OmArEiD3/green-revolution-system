@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Home, Users, MapPin, DollarSign, ReceiptText,
-  ShieldCheck, MoreHorizontal, LogOut, Calendar, Sparkles, Settings
+  ShieldCheck, MoreHorizontal, LogOut, Calendar, Sparkles, Settings, Building2
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -44,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'members', label: 'الأعضاء', icon: Users },
+    { id: 'commercial', label: 'تجاري', icon: Building2 },
     { id: 'streets', label: 'الشوارع', icon: MapPin },
     { id: 'collections', label: 'التحصيل', icon: DollarSign },
     { id: 'receipts', label: 'الإيصالات', icon: ReceiptText },
@@ -157,6 +158,7 @@ export const BottomNav: React.FC<{
   const tabs = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'members', label: 'الأعضاء', icon: Users },
+    { id: 'commercial', label: 'تجاري', icon: Building2 },
     { id: 'streets', label: 'الشوارع', icon: MapPin },
     { id: 'collections', label: 'التحصيل', icon: DollarSign },
     { id: 'receipts', label: 'الإيصالات', icon: ReceiptText },
@@ -166,7 +168,7 @@ export const BottomNav: React.FC<{
 
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 glass-bottom-nav shadow-2xl pb-safe">
-      <div className="grid grid-cols-7 h-16 max-w-md mx-auto">
+      <div className="grid grid-cols-8 h-16 max-w-md mx-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

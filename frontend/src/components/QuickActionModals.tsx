@@ -10,7 +10,11 @@ interface ModalBaseProps {
 }
 
 // 1. Add Member Modal
-export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSuccess }) => {
+interface AddMemberModalProps extends ModalBaseProps {
+  defaultMemberType?: 'RESIDENTIAL' | 'COMMERCIAL';
+}
+
+export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose, onSuccess, defaultMemberType = 'RESIDENTIAL' }) => {
   const [fullName, setFullName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [nationalId, setNationalId] = useState('');
@@ -82,6 +86,7 @@ export const AddMemberModal: React.FC<ModalBaseProps> = ({ isOpen, onClose, onSu
     setError('');
     try {
       await membersApi.create({
+        member_type: defaultMemberType,
         full_name: fullName,
         mobile_number: mobileNumber,
         national_id: nationalId,

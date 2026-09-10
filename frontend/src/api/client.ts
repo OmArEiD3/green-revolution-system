@@ -89,7 +89,7 @@ export const authApi = {
 };
 
 export const membersApi = {
-  list: async (params?: { street?: number | string; search?: string; is_active?: boolean }) => {
+  list: async (params?: { street?: number | string; search?: string; is_active?: boolean; member_type?: 'RESIDENTIAL' | 'COMMERCIAL' | 'ALL' }) => {
     return fetchAllPages<Member>('/members/', params);
   },
   get: async (id: number) => {

@@ -28,6 +28,7 @@ export const App: React.FC = () => {
 
   // Modals state
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [addMemberType, setAddMemberType] = useState<'RESIDENTIAL' | 'COMMERCIAL'>('RESIDENTIAL');
   const [isAddPracticeOpen, setIsAddPracticeOpen] = useState(false);
   const [addPracticeMemberId, setAddPracticeMemberId] = useState<number | undefined>(undefined);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
@@ -148,7 +149,23 @@ export const App: React.FC = () => {
           <MembersView
             key={`members-${refreshKey}-${selectedStreet}`}
             selectedStreet={selectedStreet}
-            onOpenAddMember={() => setIsAddMemberOpen(true)}
+            memberType="RESIDENTIAL"
+            onOpenAddMember={() => {
+              setAddMemberType('RESIDENTIAL');
+              setIsAddMemberOpen(true);
+            }}
+            onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
+          />
+        )}
+
+        {activeTab === 'commercial' && (
+          <MembersView
+            key={`commercial-${refreshKey}`}
+            memberType="COMMERCIAL"
+            onOpenAddMember={() => {
+              setAddMemberType('COMMERCIAL');
+              setIsAddMemberOpen(true);
+            }}
             onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
           />
         )}
@@ -215,7 +232,11 @@ export const App: React.FC = () => {
       {/* Global Action Modals */}
       <AddMemberModal
         isOpen={isAddMemberOpen}
-        onClose={() => setIsAddMemberOpen(false)}
+        defaultMemberType={addMemberType}
+        onClose={() => {
+          setIsAddMemberOpen(false);
+          setAddMemberType('RESIDENTIAL');
+        }}
         onSuccess={handleSuccessAction}
       />
 

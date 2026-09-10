@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Phone, MapPin, Plus, Shield, ChevronLeft, X } from 'lucide-react';
+import { Users, Search, Phone, MapPin, Plus, Shield, ChevronLeft, X, Building2, ArrowLeftRight } from 'lucide-react';
 import { Member } from '../types';
 import { membersApi } from '../api/client';
 
@@ -7,17 +7,22 @@ interface MembersViewProps {
   onOpenAddMember: () => void;
   onSelectMember: (memberId: number) => void;
   selectedStreet?: number | null;
+  memberType?: 'RESIDENTIAL' | 'COMMERCIAL';
 }
 
 export const MembersView: React.FC<MembersViewProps> = ({
   onOpenAddMember,
   onSelectMember,
   selectedStreet,
+  memberType = 'RESIDENTIAL',
 }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState('');
   const [streetFilter, setStreetFilter] = useState<number | string>(selectedStreet || '');
   const [loading, setLoading] = useState(true);
+  const [movingId, setMovingId] = useState<number | null>(null);
+
+  const isCommercial = memberType === 'COMMERCIAL';
 
   const fetchMembers = () => {
     setLoading(true);
@@ -25,7 +30,8 @@ export const MembersView: React.FC<MembersViewProps> = ({
       .list({
         street: streetFilter || undefined,
         search: search || undefined,
-      })
+        member_type: memberType,
+      } as any)
       .then(setMembers)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -40,7 +46,25 @@ export const MembersView: React.FC<MembersViewProps> = ({
       fetchMembers();
     }, 150);
     return () => clearTimeout(timer);
-  }, [search, streetFilter]);
+  }, [search, streetFilter, memberType]);
+
+  const handleMoveCategory = async (e: React.MouseEvent, member: Member) => {
+    e.stopPropagation();
+    const newType = isCommercial ? 'RESIDENTIAL' : 'COMMERCIAL';
+    const confirmMsg = isCommercial
+      ? `نقل "${member.full_name}" إلى قائمة الأعضاء الأساسيين؟`
+      : `نقل "${member.full_name}" إلى القائمة التجارية؟`;
+    if (!window.confirm(confirmMsg)) return;
+    setMovingId(member.id);
+    try {
+      await membersApi.update(member.id, { member_type: newType } as any);
+      fetchMembers();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMovingId(null);
+    }
+  };
 
   return (
     <div className="space-y-4 animate-slide-up">
@@ -49,15 +73,21 @@ export const MembersView: React.FC<MembersViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              <Users className="w-6 h-6 text-emerald-700" />
-              <span>دليل وسجل الأعضاء</span>
+              {isCommercial ? (
+                <Building2 className="w-6 h-6 text-emerald-700" />
+              ) : (
+                <Users className="w-6 h-6 text-emerald-700" />
+              )}
+              <span>{isCommercial ? 'دليل الجهات التجارية' : 'دليل وسجل الأعضاء'}</span>
             </h1>
             <span className="px-3 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-200">
-              {members.length} عضو مسجل
+              {members.length} {isCommercial ? 'جهة تجارية' : 'عضو مسجل'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            البحث الفوري بالاسم أو رقم الموبايل أو الرقم القومي لجميع شوارع الثورة الخضراء
+            {isCommercial
+              ? 'المطوّرين، المكاتب، والشركات المسجلة بمنطقة الثورة الخضراء (منفصلين عن الأعضاء الأساسيين)'
+              : 'البحث الفوري بالاسم أو رقم الموبايل أو الرقم القومي لجميع شوارع الثورة الخضراء'}
           </p>
         </div>
 
@@ -66,7 +96,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
           className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-900/20 active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
-          <span>+ إضافة عضو جديد</span>
+          <span>{isCommercial ? '+ إضافة جهة تجارية' : '+ إضافة عضو جديد'}</span>
         </button>
       </div>
 
@@ -198,6 +228,15 @@ export const MembersView: React.FC<MembersViewProps> = ({
                         {m.guard_name ? m.guard_name : 'غفير'}
                       </span>
                     )}
+
+                    <button
+                      onClick={(e) => handleMoveCategory(e, m)}
+                      disabled={movingId === m.id}
+                      title={isCommercial ? 'نقل إلى الأعضاء الأساسيين' : 'نقل إلى التجاري'}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-500 hover:text-amber-700 border border-slate-200 hover:border-amber-300 text-[11px] font-black transition-colors disabled:opacity-50"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>
