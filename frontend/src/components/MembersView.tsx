@@ -132,9 +132,9 @@ export const MembersView: React.FC<MembersViewProps> = ({
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            جميع الشوارع (1 - 17)
+            جميع الشوارع (1 - 20)
           </button>
-          {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
             <button
               key={s}
               onClick={() => setStreetFilter(s)}

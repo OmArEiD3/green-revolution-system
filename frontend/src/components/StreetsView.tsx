@@ -38,7 +38,7 @@ export const StreetsView: React.FC<StreetsViewProps> = ({
         <div>
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
             <MapPin className="w-6 h-6 text-emerald-700" />
-            <span>شوارع المنطقة (شارع 1 إلى 17)</span>
+            <span>شوارع المنطقة (شارع 1 إلى 20)</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             متابعة دقيقة لموقف التحصيل ونسب السداد لكل شارع لشهر {monthNames[month]} {year}
@@ -47,7 +47,7 @@ export const StreetsView: React.FC<StreetsViewProps> = ({
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-            17 شارع رئيسي
+            20 شارع رئيسي
           </span>
         </div>
       </div>

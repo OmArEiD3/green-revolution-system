@@ -612,7 +612,7 @@ class ReportViewSet(viewsets.ViewSet):
         month = int(request.query_params.get('month', timezone.now().month))
 
         streets_data = []
-        for s in range(1, 18):
+        for s in range(1, 21):
             members_count = Member.objects.filter(street_number=s, is_active=True, is_deleted=False).count()
             practices = Practice.objects.filter(member__street_number=s, year=year, month=month, is_deleted=False)
             req = sum(p.required_amount for p in practices)

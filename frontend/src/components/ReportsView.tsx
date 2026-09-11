@@ -71,7 +71,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             className="px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-xs font-bold bg-white"
           >
             <option value="">كل الشوارع</option>
-            {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+            {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
               <option key={s} value={s}>
                 شارع {s}
               </option>
@@ -111,7 +111,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       {/* Street Comparison Table */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-black text-slate-900 text-base">جدول مقارنة موقف الشوارع (1 إلى 17)</h2>
+          <h2 className="font-black text-slate-900 text-base">جدول مقارنة موقف الشوارع (1 إلى 20)</h2>
           <span className="text-xs text-slate-400 font-bold">اضغط على أي صف لفتح أعضاء الشارع</span>
         </div>
 

@@ -77,7 +77,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-              تحكم كامل في ممارسات الكهرباء للشوارع (1 إلى 17)، تحديد القيم الشهرية المتغيرة، وتوثيق التحصيل والإيصالات.
+              تحكم كامل في ممارسات الكهرباء للشوارع (1 إلى 20)، تحديد القيم الشهرية المتغيرة، وتوثيق التحصيل والإيصالات.
             </p>
 
             {/* Live Collection Progress Meter */}
@@ -158,7 +158,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-emerald-700 group-hover:text-emerald-900">
-            <span>تصفح الشوارع 1 - 17</span>
+            <span>تصفح الشوارع 1 - 20</span>
             <ArrowRight className="w-3 h-3 rotate-180 group-hover:-translate-x-1 transition-transform" />
           </div>
         </div>

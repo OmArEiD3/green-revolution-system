@@ -96,7 +96,7 @@ export const SettingsView: React.FC = () => {
             </div>
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-400 font-semibold">نطاق التغطية:</span>
-              <span className="font-black text-slate-900">شارع 1 إلى شارع 17</span>
+              <span className="font-black text-slate-900">شارع 1 إلى شارع 20</span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-slate-400 font-semibold">حالة الأمان وقاعدة البيانات:</span>

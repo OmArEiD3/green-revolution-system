@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 
 class Member(models.Model):
-    STREET_CHOICES = [(i, f"شارع {i}") for i in range(1, 18)]
+    STREET_CHOICES = [(i, f"شارع {i}") for i in range(1, 21)]
     MEMBER_TYPE_CHOICES = [
         ('RESIDENTIAL', 'سكني'),
         ('COMMERCIAL', 'تجاري'),
@@ -21,7 +21,7 @@ class Member(models.Model):
     national_id = models.CharField(max_length=20, blank=True, verbose_name="الرقم القومي", db_index=True)
     street_number = models.IntegerField(
         choices=STREET_CHOICES,
-        validators=[MinValueValidator(1), MaxValueValidator(17)],
+        validators=[MinValueValidator(1), MaxValueValidator(20)],
         verbose_name="رقم الشارع",
         db_index=True
     )

@@ -85,8 +85,8 @@ class MemberSerializer(serializers.ModelSerializer):
         ]
 
     def validate_street_number(self, value):
-        if value < 1 or value > 17:
-            raise serializers.ValidationError("رقم الشارع يجب أن يكون بين 1 و 17")
+        if value < 1 or value > 20:
+            raise serializers.ValidationError("رقم الشارع يجب أن يكون بين 1 و 20")
         return value
 
 

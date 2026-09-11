@@ -161,13 +161,13 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم الشارع (من 1 إلى 17) *</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم الشارع (من 1 إلى 20) *</label>
             <select
               value={streetNumber}
               onChange={(e) => setStreetNumber(Number(e.target.value))}
               className="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-sm font-bold bg-white"
             >
-              {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
                 <option key={s} value={s}>
                   شارع {s}
                 </option>
@@ -433,13 +433,13 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClos
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم الشارع (من 1 إلى 17) *</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم الشارع (من 1 إلى 20) *</label>
             <select
               value={streetNumber}
               onChange={(e) => setStreetNumber(Number(e.target.value))}
               className="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 outline-none text-sm font-bold bg-white"
             >
-              {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
                 <option key={s} value={s}>
                   شارع {s}
                 </option>

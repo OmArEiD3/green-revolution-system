@@ -111,7 +111,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
         <div className="mt-8 pt-5 border-t border-slate-800/80 text-center text-slate-500 text-[11px] font-medium flex items-center justify-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>نظام مشفر ومؤمن بالكامل لمهندس المنطقة (الشوارع 1 إلى 17)</span>
+          <span>نظام مشفر ومؤمن بالكامل لمهندس المنطقة (الشوارع 1 إلى 20)</span>
         </div>
       </div>
     </div>

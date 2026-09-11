@@ -124,8 +124,8 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
             onChange={(e) => setStreetFilter(e.target.value)}
             className="w-full px-4 py-2.5 bg-white rounded-2xl border border-slate-300 outline-none text-xs sm:text-sm font-bold text-slate-700 shadow-sm"
           >
-            <option value="">جميع الشوارع (1 إلى 17)</option>
-            {Array.from({ length: 17 }, (_, i) => i + 1).map((s) => (
+            <option value="">جميع الشوارع (1 إلى 20)</option>
+            {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
               <option key={s} value={s}>
                 شارع {s}
               </option>
