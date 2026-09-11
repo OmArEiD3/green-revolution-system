@@ -95,16 +95,24 @@ class MemberViewSet(viewsets.ModelViewSet):
         search_query = self.request.query_params.get('search')
         member_type = self.request.query_params.get('member_type')
 
-        # Default to residential-only so every existing screen (dashboard,
-        # collections, practices, reports, ...) keeps behaving exactly as
-        # before and never mixes in commercial entities unless explicitly
-        # asked for via ?member_type=COMMERCIAL (or 'ALL' for everyone).
-        if member_type == 'ALL':
-            pass
+        # Default to residential-only for LIST requests, so every existing
+        # screen (dashboard, collections, practices, reports, ...) keeps
+        # behaving exactly as before and never mixes in commercial entities
+        # unless explicitly asked for via ?member_type=COMMERCIAL (or 'ALL').
+        # Detail actions (retrieve/update/destroy) must NOT apply this
+        # default filter - otherwise fetching or editing a COMMERCIAL member
+        # by ID (e.g. to move it back to RESIDENTIAL) would 404, since it
+        # wouldn't exist in a residential-only queryset.
+        if self.action == 'list':
+            if member_type == 'ALL':
+                pass
+            elif member_type in ('RESIDENTIAL', 'COMMERCIAL'):
+                qs = qs.filter(member_type=member_type)
+            else:
+                qs = qs.filter(member_type='RESIDENTIAL')
         elif member_type in ('RESIDENTIAL', 'COMMERCIAL'):
+            # Non-list actions may still filter explicitly if a caller wants to.
             qs = qs.filter(member_type=member_type)
-        else:
-            qs = qs.filter(member_type='RESIDENTIAL')
 
         if street:
             qs = qs.filter(street_number=street)
