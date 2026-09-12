@@ -7,8 +7,8 @@ from .models import (
 
 @admin.register(Member)
 class MemberAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'mobile_number', 'street_number', 'is_active', 'is_deleted')
-    list_filter = ('street_number', 'is_active', 'is_deleted', 'has_guard')
+    list_display = ('full_name', 'member_type', 'mobile_number', 'street_number', 'is_active', 'is_deleted')
+    list_filter = ('member_type', 'street_number', 'is_active', 'is_deleted', 'has_guard')
     search_fields = ('full_name', 'mobile_number', 'national_id')
 
 

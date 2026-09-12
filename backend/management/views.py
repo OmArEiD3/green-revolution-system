@@ -206,6 +206,8 @@ class PracticeViewSet(viewsets.ModelViewSet):
         member_id = self.request.query_params.get('member_id')
         street = self.request.query_params.get('street')
         search = self.request.query_params.get('search')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
 
         if year:
             qs = qs.filter(year=year)
@@ -215,6 +217,10 @@ class PracticeViewSet(viewsets.ModelViewSet):
             qs = qs.filter(member_id=member_id)
         if street:
             qs = qs.filter(member__street_number=street)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
         if search:
             qs = qs.filter(
                 Q(member__full_name__icontains=search) |
@@ -300,9 +306,20 @@ class PracticeViewSet(viewsets.ModelViewSet):
         month = int(request.data.get('month', timezone.now().month))
         practice_type_id = request.data.get('practice_type_id')
         required_amount = Decimal(str(request.data.get('required_amount', '560.00')))
-        
-        practice_type = PracticeType.objects.get(id=practice_type_id)
-        active_members = Member.objects.filter(is_active=True, is_deleted=False)
+
+        try:
+            practice_type = PracticeType.objects.get(id=practice_type_id)
+        except (PracticeType.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {'error': 'يرجى اختيار نوع ممارسة صحيح.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Bulk monthly creation only applies to residential members; commercial
+        # entities are managed separately and don't get automatic street practices.
+        active_members = Member.objects.filter(
+            is_active=True, is_deleted=False, member_type='RESIDENTIAL'
+        )
 
         created_count = 0
         with transaction.atomic():
@@ -334,6 +351,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         member_id = self.request.query_params.get('member_id')
         practice_id = self.request.query_params.get('practice_id')
         street = self.request.query_params.get('street')
+        year = self.request.query_params.get('year')
+        month = self.request.query_params.get('month')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
         
         if member_id:
             qs = qs.filter(member_id=member_id)
@@ -341,6 +362,14 @@ class PaymentViewSet(viewsets.ModelViewSet):
             qs = qs.filter(practice_id=practice_id)
         if street:
             qs = qs.filter(member__street_number=street)
+        if year:
+            qs = qs.filter(payment_date__year=year)
+        if month:
+            qs = qs.filter(payment_date__month=month)
+        if date_from:
+            qs = qs.filter(payment_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(payment_date__lte=date_to)
             
         return qs.order_by('-payment_date', '-created_at')
 
@@ -397,6 +426,8 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         month = self.request.query_params.get('month')
         street = self.request.query_params.get('street')
         search = self.request.query_params.get('search')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
 
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -406,6 +437,18 @@ class ReceiptViewSet(viewsets.ModelViewSet):
             qs = qs.filter(practice__month=month)
         if street:
             qs = qs.filter(member__street_number=street)
+        if date_from:
+            qs = qs.filter(
+                Q(delivery_date__gte=date_from) |
+                Q(received_date__gte=date_from) |
+                Q(created_at__date__gte=date_from)
+            )
+        if date_to:
+            qs = qs.filter(
+                Q(delivery_date__lte=date_to) |
+                Q(received_date__lte=date_to) |
+                Q(created_at__date__lte=date_to)
+            )
         if search:
             qs = qs.filter(
                 Q(member__full_name__icontains=search) |
@@ -455,10 +498,16 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         qs = Expense.objects.filter(is_deleted=False)
         year = self.request.query_params.get('year')
         month = self.request.query_params.get('month')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
         if year:
             qs = qs.filter(expense_date__year=year)
         if month:
             qs = qs.filter(expense_date__month=month)
+        if date_from:
+            qs = qs.filter(expense_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(expense_date__lte=date_to)
         return qs.order_by('-expense_date', '-created_at')
 
     def create(self, request, *args, **kwargs):
@@ -494,6 +543,8 @@ class FinancialTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         year = self.request.query_params.get('year')
         month = self.request.query_params.get('month')
         member_id = self.request.query_params.get('member_id')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
 
         if tx_type:
             qs = qs.filter(transaction_type=tx_type)
@@ -501,6 +552,10 @@ class FinancialTransactionViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(transaction_date__year=year)
         if month:
             qs = qs.filter(transaction_date__month=month)
+        if date_from:
+            qs = qs.filter(transaction_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(transaction_date__lte=date_to)
         if member_id:
             qs = qs.filter(member_id=member_id)
 

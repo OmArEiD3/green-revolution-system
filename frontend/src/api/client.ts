@@ -121,7 +121,7 @@ export const practiceTypesApi = {
 };
 
 export const practicesApi = {
-  list: async (params?: { year?: number; month?: number; street?: number; member_id?: number; search?: string }) => {
+  list: async (params?: { year?: number; month?: number; street?: number; member_id?: number; search?: string; date_from?: string; date_to?: string }) => {
     return fetchAllPages<Practice>('/practices/', params);
   },
   create: async (data: { member: number; practice_type: number; year: number; month: number; required_amount: number | string; notes?: string }) => {
@@ -143,7 +143,7 @@ export const practicesApi = {
 };
 
 export const paymentsApi = {
-  list: async (params?: { member_id?: number; practice_id?: number; street?: number }) => {
+  list: async (params?: { member_id?: number; practice_id?: number; street?: number; year?: number; month?: number; date_from?: string; date_to?: string }) => {
     return fetchAllPages<any>('/payments/', params);
   },
   create: async (data: { practice: number; amount: number | string; payment_date?: string; payment_method: string; notes?: string }) => {
@@ -157,7 +157,7 @@ export const paymentsApi = {
 };
 
 export const receiptsApi = {
-  list: async (params?: { status?: string; year?: number; month?: number; street?: number; search?: string }) => {
+  list: async (params?: { status?: string; year?: number; month?: number; street?: number; search?: string; date_from?: string; date_to?: string }) => {
     return fetchAllPages<Receipt>('/receipts/', params);
   },
   update: async (id: number, data: Partial<Receipt>) => {
@@ -183,7 +183,7 @@ export const receiptsApi = {
 };
 
 export const expensesApi = {
-  list: async (params?: { year?: number; month?: number }) => {
+  list: async (params?: { year?: number; month?: number; date_from?: string; date_to?: string }) => {
     return fetchAllPages<any>('/expenses/', params);
   },
   create: async (formData: FormData) => {
@@ -195,7 +195,7 @@ export const expensesApi = {
 };
 
 export const financialApi = {
-  transactions: async (params?: { type?: string; year?: number; month?: number; member_id?: number }) => {
+  transactions: async (params?: { type?: string; year?: number; month?: number; member_id?: number; date_from?: string; date_to?: string }) => {
     return fetchAllPages<any>('/financial-transactions/', params);
   },
   recordManualOverpayment: async (data: { amount: number | string; source_name: string; payment_method: string; description?: string; transaction_date?: string }) => {
