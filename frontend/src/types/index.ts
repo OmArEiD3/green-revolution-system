@@ -123,6 +123,7 @@ export interface DashboardData {
   period: { year: number; month: number };
   members: {
     total_members: number;
+    total_commercial: number;
   };
   collections: {
     total_required: string;

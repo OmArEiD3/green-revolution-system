@@ -548,9 +548,6 @@ class ReportViewSet(viewsets.ViewSet):
         total_members = Member.objects.filter(
             is_active=True, is_deleted=False, member_type='RESIDENTIAL'
         ).count()
-        total_commercial = Member.objects.filter(
-            is_active=True, is_deleted=False, member_type='COMMERCIAL'
-        ).count()
 
         practices = Practice.objects.filter(year=year, month=month, is_deleted=False)
         total_required = practices.aggregate(total=Sum('required_amount'))['total'] or Decimal('0.00')
@@ -598,7 +595,6 @@ class ReportViewSet(viewsets.ViewSet):
             'period': {'year': year, 'month': month},
             'members': {
                 'total_members': total_members,
-                'total_commercial': total_commercial,
             },
             'collections': {
                 'total_required': str(total_required),

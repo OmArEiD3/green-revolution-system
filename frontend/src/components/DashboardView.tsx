@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, DollarSign, ReceiptText, TrendingUp, CheckCircle2, Clock, ShieldCheck, ArrowRight, Zap, CalendarPlus } from 'lucide-react';
+import { Users, DollarSign, ReceiptText, TrendingUp, CheckCircle2, Clock, ShieldCheck, ArrowRight, Zap, CalendarPlus, Building2 } from 'lucide-react';
 import { DashboardData } from '../types';
 import { reportsApi } from '../api/client';
 
@@ -159,6 +159,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-emerald-700 group-hover:text-emerald-900">
             <span>تصفح الشوارع 1 - 20</span>
+            <ArrowRight className="w-3 h-3 rotate-180 group-hover:-translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Total Commercial Entities */}
+        <div
+          onClick={() => onNavigateTab('commercial')}
+          className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500">الجهات التجارية</span>
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-sm">
+                <Building2 className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {data?.members.total_commercial || 0}
+              <span className="text-xs font-semibold text-slate-400 mr-1.5">جهة</span>
+            </div>
+          </div>
+
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-blue-700 group-hover:text-blue-900">
+            <span>عرض الدليل التجاري</span>
             <ArrowRight className="w-3 h-3 rotate-180 group-hover:-translate-x-1 transition-transform" />
           </div>
         </div>
