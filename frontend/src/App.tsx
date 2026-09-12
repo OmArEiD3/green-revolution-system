@@ -9,7 +9,7 @@ import { FinancialsView } from './components/FinancialsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { LoginView } from './components/LoginView';
-import { AddMemberModal, EditMemberModal, AddPracticeModal, EditPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/QuickActionModals';
+import { AddMemberModal, EditMemberModal, AddPracticeModal, EditPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/modals';
 import { MemberDetailModal } from './components/MemberDetailModal';
 import { User, Member, Practice } from './types';
 import { authApi, membersApi } from './api/client';
