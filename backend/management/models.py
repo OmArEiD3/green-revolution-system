@@ -98,6 +98,12 @@ class Practice(models.Model):
 
     @property
     def total_paid(self) -> Decimal:
+        if hasattr(self, '_prefetched_objects_cache') and 'payments' in self._prefetched_objects_cache:
+            paid_sum = sum(
+                (p.amount for p in self.payments.all() if not p.is_voided),
+                Decimal('0.00')
+            )
+            return paid_sum
         paid_sum = self.payments.filter(is_voided=False).aggregate(total=Sum('amount'))['total']
         return Decimal(paid_sum) if paid_sum is not None else Decimal('0.00')
 

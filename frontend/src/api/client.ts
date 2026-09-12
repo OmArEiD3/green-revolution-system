@@ -1,5 +1,8 @@
 import axios from 'axios';
-import { Member, Receipt, Practice, PracticeType, DashboardData, StreetData, MemberStatement } from '../types';
+import {
+  Member, Receipt, Practice, PracticeType, DashboardData,
+  StreetData, MemberStatement, CommercialReportResponse, BackupInspectResult
+} from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -213,6 +216,10 @@ export const reportsApi = {
     const res = await api.get('/reports/streets/', { params: { year, month } });
     return res.data;
   },
+  commercial: async (params?: { year?: number | string; month?: number | string; date_from?: string; date_to?: string; search?: string }): Promise<CommercialReportResponse> => {
+    const res = await api.get('/reports/commercial/', { params });
+    return res.data;
+  },
   exportExcelUrl: (year: number, month: number, street?: number | string) => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
     const base = `${apiBase}/reports/export_excel/?year=${year}&month=${month}`;
@@ -221,6 +228,14 @@ export const reportsApi = {
   backupExportUrl: () => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
     return `${apiBase}/reports/backup_export/`;
+  },
+  backupInspect: async (file: File): Promise<BackupInspectResult> => {
+    const formData = new FormData();
+    formData.append('backup_file', file);
+    const res = await api.post('/reports/backup_inspect/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
   },
   backupRestore: async (file: File, confirmPhrase: string) => {
     const formData = new FormData();

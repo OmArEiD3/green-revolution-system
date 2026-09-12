@@ -171,3 +171,72 @@ export interface MemberStatement {
   payments: Payment[];
   receipts: Receipt[];
 }
+
+export interface CommercialReportRecord {
+  id: number;
+  member_id: number;
+  member_name: string;
+  mobile_number: string;
+  national_id: string;
+  practice_type_name: string;
+  year: number;
+  month: number;
+  required_amount: string;
+  total_paid: string;
+  remaining_amount: string;
+  overpayment_amount: string;
+  payment_status: 'UNPAID' | 'FULLY_PAID';
+  receipt_status: 'NOT_RECEIVED' | 'RECEIVED' | 'DELIVERED' | 'NONE';
+  receipt_status_display: string;
+  receipt_number: string;
+  created_at: string;
+}
+
+export interface CommercialReportSummary {
+  total_commercial_members: number;
+  total_practices: number;
+  total_required: string;
+  total_paid: string;
+  total_remaining: string;
+  total_overpayment: string;
+  fully_paid_count: number;
+  unpaid_count: number;
+  collection_rate: number;
+}
+
+export interface CommercialReportResponse {
+  period: {
+    year?: number | string;
+    month?: number | string;
+    date_from?: string;
+    date_to?: string;
+  };
+  summary: CommercialReportSummary;
+  records: CommercialReportRecord[];
+}
+
+export interface BackupInspectResult {
+  valid: boolean;
+  filename: string;
+  file_size_bytes: number;
+  total_objects: number;
+  counts: {
+    members_residential: number;
+    members_commercial: number;
+    practice_types: number;
+    practices: number;
+    payments: number;
+    receipts: number;
+    expenses: number;
+    transactions: number;
+    audit_logs: number;
+    other: number;
+  };
+  financial_totals: {
+    total_payments: string;
+    total_expenses: string;
+  };
+  verified_at: string;
+  message: string;
+}
+

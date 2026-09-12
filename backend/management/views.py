@@ -200,7 +200,7 @@ class PracticeViewSet(viewsets.ModelViewSet):
     serializer_class = PracticeSerializer
 
     def get_queryset(self):
-        qs = Practice.objects.filter(is_deleted=False).select_related('member', 'practice_type', 'receipt')
+        qs = Practice.objects.filter(is_deleted=False).select_related('member', 'practice_type', 'receipt').prefetch_related('payments')
         year = self.request.query_params.get('year')
         month = self.request.query_params.get('month')
         member_id = self.request.query_params.get('member_id')
@@ -598,8 +598,7 @@ class ReportViewSet(viewsets.ViewSet):
         year = int(request.query_params.get('year', timezone.now().year))
         month = int(request.query_params.get('month', timezone.now().month))
 
-        # Only residential members count here, matching the "الأعضاء" tab's
-        # default view. Commercial entities are tracked separately.
+        # Residential and Commercial member totals
         total_members = Member.objects.filter(
             is_active=True, is_deleted=False, member_type='RESIDENTIAL'
         ).count()
@@ -607,7 +606,7 @@ class ReportViewSet(viewsets.ViewSet):
             is_active=True, is_deleted=False, member_type='COMMERCIAL'
         ).count()
 
-        practices = Practice.objects.filter(year=year, month=month, is_deleted=False)
+        practices = Practice.objects.filter(year=year, month=month, is_deleted=False).prefetch_related('payments')
         total_required = practices.aggregate(total=Sum('required_amount'))['total'] or Decimal('0.00')
 
         # Real collections and overpayments for this month
@@ -632,13 +631,12 @@ class ReportViewSet(viewsets.ViewSet):
         remaining = max(Decimal('0.00'), total_required - collections)
         net_balance = (collections + overpayments) - expenses
 
-        # Status counts
+        # Fast in-memory status count using prefetched payments
         fully_paid_count = 0
         unpaid_count = 0
 
         for p in practices:
-            st = p.payment_status
-            if st == 'FULLY_PAID':
+            if p.payment_status == 'FULLY_PAID':
                 fully_paid_count += 1
             else:
                 unpaid_count += 1
@@ -682,30 +680,140 @@ class ReportViewSet(viewsets.ViewSet):
         year = int(request.query_params.get('year', timezone.now().year))
         month = int(request.query_params.get('month', timezone.now().month))
 
+        # Query 1: Get residential member counts grouped by street in a single query
+        member_counts_qs = (
+            Member.objects.filter(is_active=True, is_deleted=False, member_type='RESIDENTIAL')
+            .values('street_number')
+            .annotate(c=Count('id'))
+        )
+        member_counts = {item['street_number']: item['c'] for item in member_counts_qs}
+
+        # Query 2: Fetch all practices for the month with prefetched payments in a single query
+        practices = (
+            Practice.objects.filter(
+                member__member_type='RESIDENTIAL',
+                year=year,
+                month=month,
+                is_deleted=False
+            )
+            .select_related('member')
+            .prefetch_related('payments')
+        )
+
+        practices_by_street = {s: [] for s in range(1, 21)}
+        for p in practices:
+            st = p.member.street_number
+            if st in practices_by_street:
+                practices_by_street[st].append(p)
+
         streets_data = []
         for s in range(1, 21):
-            members_count = Member.objects.filter(
-                street_number=s, is_active=True, is_deleted=False, member_type='RESIDENTIAL'
-            ).count()
-            practices = Practice.objects.filter(
-                member__street_number=s, member__member_type='RESIDENTIAL',
-                year=year, month=month, is_deleted=False
-            )
-            req = sum(p.required_amount for p in practices)
-            paid = sum(p.total_paid for p in practices)
-            rem = sum(p.remaining_amount for p in practices)
+            s_practices = practices_by_street[s]
+            req = sum((p.required_amount for p in s_practices), Decimal('0.00'))
+            paid = sum((p.total_paid for p in s_practices), Decimal('0.00'))
+            rem = sum((p.remaining_amount for p in s_practices), Decimal('0.00'))
 
             streets_data.append({
                 'street_number': s,
                 'street_name': f"شارع {s}",
-                'members_count': members_count,
+                'members_count': member_counts.get(s, 0),
                 'required_amount': str(req),
                 'paid_amount': str(paid),
                 'remaining_amount': str(rem),
-                'practices_count': practices.count()
+                'practices_count': len(s_practices)
             })
 
         return Response({'year': year, 'month': month, 'streets': streets_data})
+
+    @action(detail=False, methods=['get'])
+    def commercial(self, request):
+        """
+        Commercial entities report with period filtering, totals, and member breakdown.
+        """
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        search = request.query_params.get('search', '').strip()
+
+        # Query commercial practices
+        qs = Practice.objects.filter(
+            member__member_type='COMMERCIAL',
+            is_deleted=False
+        ).select_related('member', 'practice_type', 'receipt').prefetch_related('payments')
+
+        if year:
+            qs = qs.filter(year=int(year))
+        if month:
+            qs = qs.filter(month=int(month))
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        if search:
+            qs = qs.filter(
+                Q(member__full_name__icontains=search) |
+                Q(member__mobile_number__icontains=search) |
+                Q(member__national_id__icontains=search)
+            )
+
+        practices = list(qs.order_by('member__full_name', '-year', '-month'))
+
+        total_commercial_members = Member.objects.filter(
+            is_active=True, is_deleted=False, member_type='COMMERCIAL'
+        ).count()
+
+        total_required = sum((p.required_amount for p in practices), Decimal('0.00'))
+        total_paid = sum((p.total_paid for p in practices), Decimal('0.00'))
+        total_remaining = sum((p.remaining_amount for p in practices), Decimal('0.00'))
+        total_overpayment = sum((p.overpayment_amount for p in practices), Decimal('0.00'))
+        fully_paid_count = sum(1 for p in practices if p.payment_status == 'FULLY_PAID')
+        unpaid_count = len(practices) - fully_paid_count
+        collection_rate = (
+            min(100, round(float(total_paid / total_required) * 100))
+            if total_required > Decimal('0.00') else 0
+        )
+
+        rows = []
+        for p in practices:
+            rows.append({
+                'id': p.id,
+                'member_id': p.member_id,
+                'member_name': p.member.full_name,
+                'mobile_number': p.member.mobile_number,
+                'national_id': p.member.national_id,
+                'practice_type_name': p.practice_type.name,
+                'year': p.year,
+                'month': p.month,
+                'required_amount': str(p.required_amount),
+                'total_paid': str(p.total_paid),
+                'remaining_amount': str(p.remaining_amount),
+                'overpayment_amount': str(p.overpayment_amount),
+                'payment_status': p.payment_status,
+                'receipt_status': p.receipt.status if hasattr(p, 'receipt') and p.receipt else 'NONE',
+                'receipt_status_display': (
+                    p.receipt.get_status_display()
+                    if hasattr(p, 'receipt') and p.receipt else 'بدون إيصال'
+                ),
+                'receipt_number': p.receipt.receipt_number if hasattr(p, 'receipt') and p.receipt else '',
+                'created_at': p.created_at.strftime('%Y-%m-%d'),
+            })
+
+        return Response({
+            'period': {'year': year, 'month': month, 'date_from': date_from, 'date_to': date_to},
+            'summary': {
+                'total_commercial_members': total_commercial_members,
+                'total_practices': len(practices),
+                'total_required': str(total_required),
+                'total_paid': str(total_paid),
+                'total_remaining': str(total_remaining),
+                'total_overpayment': str(total_overpayment),
+                'fully_paid_count': fully_paid_count,
+                'unpaid_count': unpaid_count,
+                'collection_rate': collection_rate,
+            },
+            'records': rows,
+        })
 
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
@@ -714,29 +822,57 @@ class ReportViewSet(viewsets.ViewSet):
         street = request.query_params.get('street')
 
         wb = openpyxl.Workbook()
-        
-        # Sheet 1: الممارسات والتحصيل
-        ws1 = wb.active
-        ws1.title = "كشف التحصيل والممارسات"
-        ws1.views.sheetView[0].rightToLeft = True
-
-        headers = ["م", "اسم العضو", "الشارع", "رقم الموبايل", "نوع الممارسة", "المطلوب", "المدفوع", "المتبقي", "المبلغ الزائد", "حالة السداد", "حالة الإيصال"]
-        ws1.append(headers)
 
         header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        header_font = Font(color="FFFFFF", bold=True, size=12)
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        total_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        total_font = Font(color="0F172A", bold=True, size=11)
+        center_align = Alignment(horizontal="center", vertical="center")
+
+        # ---------------------------------------------------------------------
+        # Sheet 1: الممارسات السكنية (الشوارع 1 إلى 20)
+        # ---------------------------------------------------------------------
+        ws1 = wb.active
+        ws1.title = "الممارسات السكنية (1-20)"
+        ws1.views.sheetView[0].rightToLeft = True
+
+        headers_res = [
+            "م", "اسم العضو", "الشارع", "رقم الموبايل", "نوع الممارسة",
+            "المطلوب (ج.م)", "المدفوع (ج.م)", "المتبقي (ج.م)", "الزيادة (ج.م)",
+            "حالة السداد", "حالة الإيصال"
+        ]
+        ws1.append(headers_res)
 
         for col_num, cell in enumerate(ws1[1], 1):
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.alignment = center_align
 
-        practices = Practice.objects.filter(year=year, month=month, is_deleted=False).select_related('member', 'practice_type', 'receipt')
+        practices_res = (
+            Practice.objects.filter(
+                member__member_type='RESIDENTIAL',
+                year=year,
+                month=month,
+                is_deleted=False
+            )
+            .select_related('member', 'practice_type', 'receipt')
+            .prefetch_related('payments')
+        )
         if street:
-            practices = practices.filter(member__street_number=street)
+            practices_res = practices_res.filter(member__street_number=street)
 
         row_idx = 1
-        for p in practices:
+        res_req_sum = Decimal('0.00')
+        res_paid_sum = Decimal('0.00')
+        res_rem_sum = Decimal('0.00')
+        res_over_sum = Decimal('0.00')
+
+        for p in practices_res:
+            res_req_sum += p.required_amount
+            res_paid_sum += p.total_paid
+            res_rem_sum += p.remaining_amount
+            res_over_sum += p.overpayment_amount
+
             ws1.append([
                 row_idx,
                 p.member.full_name,
@@ -747,22 +883,107 @@ class ReportViewSet(viewsets.ViewSet):
                 float(p.total_paid),
                 float(p.remaining_amount),
                 float(p.overpayment_amount),
-                p.get_payment_status_display() if hasattr(p, 'get_payment_status_display') else p.payment_status,
+                "مسدد بالكامل" if p.payment_status == 'FULLY_PAID' else "غير مسدد",
                 p.receipt.get_status_display() if hasattr(p, 'receipt') and p.receipt else 'بدون إيصال'
             ])
             row_idx += 1
 
-        # Auto-adjust column widths
+        # Summary total row for residential
+        summary_res_row = [
+            "الإجمالي", "", "", "", "",
+            float(res_req_sum), float(res_paid_sum), float(res_rem_sum), float(res_over_sum),
+            "", ""
+        ]
+        ws1.append(summary_res_row)
+        for cell in ws1[ws1.max_row]:
+            cell.fill = total_fill
+            cell.font = total_font
+            cell.alignment = center_align
+
+        # Auto column width
         for col in ws1.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
             col_letter = openpyxl.utils.get_column_letter(col[0].column)
-            ws1.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            ws1.column_dimensions[col_letter].width = max(max_len + 4, 13)
+
+        # ---------------------------------------------------------------------
+        # Sheet 2: الجهات والأنشطة التجارية
+        # ---------------------------------------------------------------------
+        ws2 = wb.create_sheet(title="الجهات والأنشطة التجارية")
+        ws2.views.sheetView[0].rightToLeft = True
+
+        comm_header_fill = PatternFill(start_color="065F46", end_color="065F46", fill_type="solid")
+        headers_comm = [
+            "م", "اسم النشاط / الجهة التجارية", "رقم الهاتف", "الرقم القومي / السجل",
+            "نوع الممارسة", "المطلوب (ج.م)", "المدفوع (ج.م)", "المتبقي (ج.م)",
+            "الزيادة (ج.م)", "حالة السداد", "حالة الإيصال"
+        ]
+        ws2.append(headers_comm)
+        for col_num, cell in enumerate(ws2[1], 1):
+            cell.fill = comm_header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+
+        practices_comm = (
+            Practice.objects.filter(
+                member__member_type='COMMERCIAL',
+                year=year,
+                month=month,
+                is_deleted=False
+            )
+            .select_related('member', 'practice_type', 'receipt')
+            .prefetch_related('payments')
+        )
+
+        row_idx = 1
+        comm_req_sum = Decimal('0.00')
+        comm_paid_sum = Decimal('0.00')
+        comm_rem_sum = Decimal('0.00')
+        comm_over_sum = Decimal('0.00')
+
+        for p in practices_comm:
+            comm_req_sum += p.required_amount
+            comm_paid_sum += p.total_paid
+            comm_rem_sum += p.remaining_amount
+            comm_over_sum += p.overpayment_amount
+
+            ws2.append([
+                row_idx,
+                p.member.full_name,
+                p.member.mobile_number,
+                p.member.national_id or "-",
+                p.practice_type.name,
+                float(p.required_amount),
+                float(p.total_paid),
+                float(p.remaining_amount),
+                float(p.overpayment_amount),
+                "مسدد بالكامل" if p.payment_status == 'FULLY_PAID' else "غير مسدد",
+                p.receipt.get_status_display() if hasattr(p, 'receipt') and p.receipt else 'بدون إيصال'
+            ])
+            row_idx += 1
+
+        # Summary total row for commercial
+        summary_comm_row = [
+            "الإجمالي", "", "", "", "",
+            float(comm_req_sum), float(comm_paid_sum), float(comm_rem_sum), float(comm_over_sum),
+            "", ""
+        ]
+        ws2.append(summary_comm_row)
+        for cell in ws2[ws2.max_row]:
+            cell.fill = total_fill
+            cell.font = total_font
+            cell.alignment = center_align
+
+        for col in ws2.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            ws2.column_dimensions[col_letter].width = max(max_len + 4, 13)
 
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
 
-        filename = f"Green_Revolution_Report_{month}_{year}.xlsx"
+        filename = f"Green_Revolution_Full_Report_{month}_{year}.xlsx"
         response = HttpResponse(
             output.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -791,6 +1012,80 @@ class ReportViewSet(viewsets.ViewSet):
         response = HttpResponse(data, content_type='application/json')
         response['Content-Disposition'] = f'attachment; filename="green_revolution_backup_{timestamp}.json"'
         return response
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def backup_inspect(self, request):
+        """Inspect and validate a backup file without modifying the database."""
+        uploaded_file = request.FILES.get('backup_file')
+        if not uploaded_file:
+            return Response({'error': 'يرجى اختيار ملف النسخة الاحتياطية (JSON) أولاً.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content = uploaded_file.read().decode('utf-8')
+            deserialized_objects = list(django_serializers.deserialize('json', content))
+            if not deserialized_objects:
+                return Response({'error': 'الملف فارغ أو لا يحتوي على بيانات صالحة.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f'ملف النسخة الاحتياطية غير صالح أو تالف: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        counts = {
+            'members_residential': 0,
+            'members_commercial': 0,
+            'practice_types': 0,
+            'practices': 0,
+            'payments': 0,
+            'receipts': 0,
+            'expenses': 0,
+            'transactions': 0,
+            'audit_logs': 0,
+            'other': 0,
+        }
+
+        total_payments_amount = Decimal('0.00')
+        total_expenses_amount = Decimal('0.00')
+
+        for d_obj in deserialized_objects:
+            instance = d_obj.object
+            model_name = instance._meta.model_name
+            if model_name == 'member':
+                if getattr(instance, 'member_type', 'RESIDENTIAL') == 'COMMERCIAL':
+                    counts['members_commercial'] += 1
+                else:
+                    counts['members_residential'] += 1
+            elif model_name == 'practicetype':
+                counts['practice_types'] += 1
+            elif model_name == 'practice':
+                counts['practices'] += 1
+            elif model_name == 'payment':
+                counts['payments'] += 1
+                if not getattr(instance, 'is_voided', False):
+                    total_payments_amount += getattr(instance, 'amount', Decimal('0.00')) or Decimal('0.00')
+            elif model_name == 'receipt':
+                counts['receipts'] += 1
+            elif model_name == 'expense':
+                counts['expenses'] += 1
+                if not getattr(instance, 'is_deleted', False):
+                    total_expenses_amount += getattr(instance, 'amount', Decimal('0.00')) or Decimal('0.00')
+            elif model_name == 'financialtransaction':
+                counts['transactions'] += 1
+            elif model_name == 'auditlog':
+                counts['audit_logs'] += 1
+            else:
+                counts['other'] += 1
+
+        return Response({
+            'valid': True,
+            'filename': uploaded_file.name,
+            'file_size_bytes': uploaded_file.size,
+            'total_objects': len(deserialized_objects),
+            'counts': counts,
+            'financial_totals': {
+                'total_payments': str(total_payments_amount),
+                'total_expenses': str(total_expenses_amount),
+            },
+            'verified_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': 'النسخة الاحتياطية سليمة ومتوافقة بالكامل مع هيكل قاعدة البيانات.',
+        })
 
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def backup_restore(self, request):
