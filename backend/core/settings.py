@@ -151,5 +151,11 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 50,
+    # A community-management app like this realistically has hundreds, not
+    # thousands, of members/practices/payments. Keeping the page size large
+    # means every list screen loads in a SINGLE request instead of several
+    # sequential ones - each of which pays the full Vercel<->PythonAnywhere
+    # network round-trip cost. Pagination itself is still active (so a
+    # future, much larger dataset degrades gracefully instead of timing out).
+    'PAGE_SIZE': 1000,
 }
