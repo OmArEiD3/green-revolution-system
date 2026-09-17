@@ -6,7 +6,7 @@ from django.db.models import Sum, Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.core import serializers as django_serializers
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -83,8 +83,11 @@ class AuthViewSet(viewsets.ViewSet):
 
 class MemberViewSet(viewsets.ModelViewSet):
     serializer_class = MemberSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['full_name', 'mobile_number', 'national_id']
+    # Search is handled entirely inside get_queryset() below (it already
+    # covers name/mobile/national_id/guard info). A DRF SearchFilter backend
+    # must NOT also be added here - it would re-filter the queryset using
+    # its own narrower field list, silently cancelling out any match that
+    # only came from a field it doesn't know about (e.g. guard_name).
 
     def get_queryset(self):
         qs = Member.objects.filter(is_deleted=False).annotate(
@@ -123,6 +126,9 @@ class MemberViewSet(viewsets.ModelViewSet):
                 Q(full_name__icontains=search_query) |
                 Q(mobile_number__icontains=search_query) |
                 Q(national_id__icontains=search_query) |
+                Q(guard_name__icontains=search_query) |
+                Q(guard_mobile__icontains=search_query) |
+                Q(guard_mobile_2__icontains=search_query) |
                 Q(id__iexact=search_query)
             )
         return qs.order_by('street_number', 'full_name')
@@ -225,7 +231,10 @@ class PracticeViewSet(viewsets.ModelViewSet):
             qs = qs.filter(
                 Q(member__full_name__icontains=search) |
                 Q(member__mobile_number__icontains=search) |
-                Q(member__national_id__icontains=search)
+                Q(member__national_id__icontains=search) |
+                Q(member__guard_name__icontains=search) |
+                Q(member__guard_mobile__icontains=search) |
+                Q(member__guard_mobile_2__icontains=search)
             )
         return qs.order_by('member__street_number', 'member__full_name')
 
@@ -453,7 +462,10 @@ class ReceiptViewSet(viewsets.ModelViewSet):
             qs = qs.filter(
                 Q(member__full_name__icontains=search) |
                 Q(receipt_number__icontains=search) |
-                Q(member__mobile_number__icontains=search)
+                Q(member__mobile_number__icontains=search) |
+                Q(member__guard_name__icontains=search) |
+                Q(member__guard_mobile__icontains=search) |
+                Q(member__guard_mobile_2__icontains=search)
             )
 
         return qs.order_by('member__street_number', 'member__full_name')
@@ -754,7 +766,10 @@ class ReportViewSet(viewsets.ViewSet):
             qs = qs.filter(
                 Q(member__full_name__icontains=search) |
                 Q(member__mobile_number__icontains=search) |
-                Q(member__national_id__icontains=search)
+                Q(member__national_id__icontains=search) |
+                Q(member__guard_name__icontains=search) |
+                Q(member__guard_mobile__icontains=search) |
+                Q(member__guard_mobile_2__icontains=search)
             )
 
         practices = list(qs.order_by('member__full_name', '-year', '-month'))
