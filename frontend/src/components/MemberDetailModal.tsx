@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin, Trash2 } from 'lucide-react';
+import { X, Phone, Shield, Calendar, DollarSign, Plus, Pencil, MapPin, Trash2, Map, Building2, Copy, Check } from 'lucide-react';
 import { MemberStatement, Practice } from '../types';
 import { membersApi } from '../api/client';
+import { LocationPickerModal } from './LocationPickerModal';
+import { isPointInPolygon, loadZoneCoordinates } from '../utils/zoneHelper';
 
 interface MemberDetailModalProps {
   memberId: number | null;
@@ -33,7 +35,13 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'current' | 'history' | 'payments' | 'receipts'>('current');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [zoneCoords, setZoneCoords] = useState<[number, number][]>([]);
+  const [copiedCoords, setCopiedCoords] = useState(false);
+
+  useEffect(() => {
+    loadZoneCoordinates().then(setZoneCoords).catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (isOpen && memberId) {
@@ -87,11 +95,17 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 {m?.street_number ? `ش${m.street_number}` : '🌱'}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">{m?.full_name}</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
                     شارع {m?.street_number}
                   </span>
+                  {m?.member_type === 'COMMERCIAL' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                      <Building2 className="w-3 h-3" />
+                      <span>نشاط تجاري</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
                   {m?.mobile_number ? (
@@ -198,22 +212,117 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
           )}
 
           {/* Location pill */}
-          {m?.latitude != null && m?.longitude != null && (
-            <div className="mt-3.5 p-2.5 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs shadow-sm">
+          <div className="mt-3.5 p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between text-xs flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-emerald-700" />
-                <span className="text-slate-700 font-semibold">موقع العقار محدد</span>
+                <MapPin className={`w-4 h-4 ${m?.latitude != null ? 'text-emerald-700' : 'text-slate-400'}`} />
+                <span className="text-slate-800 font-bold">
+                  {m?.latitude != null ? (
+                    m?.member_type === 'COMMERCIAL' ? 'موقع النشاط التجاري محدد على الخريطة' : 'موقع العقار محدد على الخريطة'
+                  ) : (
+                    'لم يتم تحديد الموقع الجغرافي بعد'
+                  )}
+                </span>
+                {m?.latitude != null && m?.longitude != null && zoneCoords.length >= 3 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                      isPointInPolygon([Number(m.latitude), Number(m.longitude)], zoneCoords)
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
+                  >
+                    {isPointInPolygon([Number(m.latitude), Number(m.longitude)], zoneCoords)
+                      ? '✓ داخل زون الثورة الخضراء'
+                      : '⚠️ خارج نطاق الزون المعتمد'}
+                  </span>
+                )}
               </div>
-              <a
-                href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200"
-              >
-                <MapPin className="w-3 h-3" />
-                <span>فتح على خرائط جوجل</span>
-              </a>
+
+              <div className="flex items-center gap-2">
+                {m?.latitude != null && m?.longitude != null ? (
+                  <>
+                    <a
+                      href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200 transition-colors text-xs"
+                      title="فتح الموقع في تطبيق خرائط جوجل والملاحة"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>خرائط جوجل</span>
+                    </a>
+                    <button
+                      onClick={() => setIsLocationPickerOpen(true)}
+                      className="text-slate-700 font-bold flex items-center gap-1 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors text-xs"
+                      title="فتح نافذة تعديل الموقع على الخريطة التفاعلية"
+                    >
+                      <Map className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>تعديل الموقع</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setIsLocationPickerOpen(true)}
+                    className="text-white font-bold flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-xl shadow-sm transition-all text-xs"
+                  >
+                    <Map className="w-3.5 h-3.5" />
+                    <span>تحديد الموقع على الخريطة 📍</span>
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Coordinates Display & Copy Helper */}
+            {m?.latitude != null && m?.longitude != null && (
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                <span>الإحداثيات: {Number(m.latitude).toFixed(6)}, {Number(m.longitude).toFixed(6)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${m.latitude}, ${m.longitude}`);
+                    setCopiedCoords(true);
+                    setTimeout(() => setCopiedCoords(false), 2000);
+                  }}
+                  className="flex items-center gap-1 text-slate-600 hover:text-emerald-700 font-sans font-bold text-[10px]"
+                >
+                  {copiedCoords ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span className="text-emerald-600">تم النسخ!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>نسخ الإحداثيات</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Location Picker Modal */}
+          {m && (
+            <LocationPickerModal
+              isOpen={isLocationPickerOpen}
+              latitude={m.latitude != null ? Number(m.latitude) : null}
+              longitude={m.longitude != null ? Number(m.longitude) : null}
+              memberName={m.full_name}
+              streetNumber={m.street_number}
+              memberType={m.member_type}
+              onSave={async (lat, lng) => {
+                try {
+                  await membersApi.update(m.id, { latitude: lat, longitude: lng });
+                  // Refresh statement
+                  const updated = await membersApi.statement(m.id, year, month);
+                  setStatement(updated);
+                  if (onMemberDeleted) onMemberDeleted(); // trigger refresh
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              onClose={() => setIsLocationPickerOpen(false)}
+            />
           )}
         </div>
 

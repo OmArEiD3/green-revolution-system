@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, UserPlus, MapPin } from 'lucide-react';
+import { X, Check, UserPlus, MapPin, Map } from 'lucide-react';
 import { membersApi } from '../../api/client';
 import { ModalBaseProps } from './shared';
+import { LocationPickerModal } from '../LocationPickerModal';
 
 interface AddMemberModalProps extends ModalBaseProps {
   defaultMemberType?: 'RESIDENTIAL' | 'COMMERCIAL';
@@ -18,6 +19,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
   const [guardMobile2, setGuardMobile2] = useState('');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -223,14 +225,22 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
                 <span className="font-mono text-emerald-800 font-bold">
                   📍 {latitude.toFixed(6)}, {longitude.toFixed(6)}
                 </span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsLocationPickerOpen(true)}
+                    className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition-colors"
+                  >
+                    <Map className="w-3 h-3" />
+                    <span>تعديل على الخريطة</span>
+                  </button>
                   <a
                     href={`https://www.google.com/maps?q=${latitude},${longitude}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-emerald-700 font-bold underline"
+                    className="text-emerald-700 font-bold underline px-1"
                   >
-                    فتح على الخريطة
+                    فتح
                   </a>
                   <button
                     type="button"
@@ -238,25 +248,50 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
                       setLatitude(null);
                       setLongitude(null);
                     }}
-                    className="text-rose-600 font-bold"
+                    className="text-rose-600 font-bold px-1"
                   >
                     إزالة
                   </button>
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleCaptureLocation}
-                disabled={locating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 text-emerald-800 font-bold text-xs hover:bg-emerald-50 disabled:opacity-60"
-              >
-                <MapPin className="w-4 h-4" />
-                <span>{locating ? 'جاري تحديد موقعك...' : '📍 تحديد الموقع الحالي (قف أمام العقار واضغط هنا)'}</span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLocationPickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all active:scale-98"
+                >
+                  <Map className="w-4 h-4" />
+                  <span>تحديد على الخريطة التفاعلية 🗺️</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCaptureLocation}
+                  disabled={locating}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl border border-emerald-300 bg-emerald-50/70 text-emerald-800 font-bold text-xs hover:bg-emerald-100 transition-colors disabled:opacity-60"
+                >
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  <span>{locating ? 'جاري التحديد...' : 'موقعي الحالي GPS'}</span>
+                </button>
+              </div>
             )}
             {locationError && <p className="text-[11px] text-rose-600 font-bold mt-1.5">{locationError}</p>}
           </div>
+
+          {/* Location Picker Modal */}
+          <LocationPickerModal
+            isOpen={isLocationPickerOpen}
+            latitude={latitude}
+            longitude={longitude}
+            memberName={fullName}
+            streetNumber={Number(streetNumber)}
+            memberType={defaultMemberType}
+            onSave={(lat, lng) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            onClose={() => setIsLocationPickerOpen(false)}
+          />
 
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
             <button

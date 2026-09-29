@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Home, Users, MapPin, DollarSign, ReceiptText,
-  ShieldCheck, FileSpreadsheet, LogOut, Calendar, Sparkles, Settings, Building2
+  ShieldCheck, FileSpreadsheet, LogOut, Calendar, Sparkles, Settings, Building2, Compass
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -45,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'members', label: 'الأعضاء', icon: Users },
     { id: 'commercial', label: 'تجاري', icon: Building2 },
+    { id: 'map', label: 'الخريطة الحية', icon: Compass },
     { id: 'streets', label: 'الشوارع', icon: MapPin },
     { id: 'collections', label: 'التحصيل', icon: DollarSign },
     { id: 'receipts', label: 'الإيصالات', icon: ReceiptText },
@@ -162,6 +163,7 @@ export const BottomNav: React.FC<{
   const tabs = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'members', label: 'الأعضاء', icon: Users },
+    { id: 'map', label: 'الخريطة', icon: Compass },
     { id: 'commercial', label: 'تجاري', icon: Building2 },
     { id: 'streets', label: 'الشوارع', icon: MapPin },
     { id: 'collections', label: 'التحصيل', icon: DollarSign },

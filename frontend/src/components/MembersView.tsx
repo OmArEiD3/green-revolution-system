@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Phone, MapPin, Plus, Shield, ChevronLeft, X, Building2, ArrowLeftRight } from 'lucide-react';
+import { Users, Search, Phone, MapPin, Plus, Shield, ChevronLeft, X, Building2, ArrowLeftRight, Map } from 'lucide-react';
 import { Member } from '../types';
 import { membersApi } from '../api/client';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface MembersViewProps {
   onOpenAddMember: () => void;
@@ -21,6 +22,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
   const [streetFilter, setStreetFilter] = useState<number | string>(selectedStreet || '');
   const [loading, setLoading] = useState(true);
   const [movingId, setMovingId] = useState<number | null>(null);
+  const [pickingMember, setPickingMember] = useState<Member | null>(null);
 
   const isCommercial = memberType === 'COMMERCIAL';
 
@@ -178,10 +180,14 @@ export const MembersView: React.FC<MembersViewProps> = ({
                       {m.full_name}
                     </h3>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
-                      <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                        <MapPin className="w-3 h-3 text-emerald-600" />
+                      <span className="font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200 text-xs">
                         شارع {m.street_number}
                       </span>
+                      {isCommercial && (
+                        <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200 text-[10px]">
+                          تجاري
+                        </span>
+                      )}
                       {m.national_id && <span className="font-mono text-[11px] text-slate-400">• {m.national_id}</span>}
                     </div>
                   </div>
@@ -209,17 +215,44 @@ export const MembersView: React.FC<MembersViewProps> = ({
                   )}
 
                   <div className="flex items-center gap-1.5">
-                    {m.latitude != null && m.longitude != null && (
-                      <a
-                        href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 text-[11px] font-black transition-colors"
-                        title="فتح الموقع على خرائط جوجل"
+                    {m.latitude != null && m.longitude != null ? (
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`https://www.google.com/maps?q=${m.latitude},${m.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-black transition-colors"
+                          title="الموقع محدد على الخريطة (انقر للفتح في خرائط جوجل GPS)"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>GPS</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPickingMember(m);
+                          }}
+                          className="p-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 text-[11px] transition-colors"
+                          title="تعديل الموقع على الخريطة"
+                        >
+                          <Map className="w-3.5 h-3.5 text-slate-600" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPickingMember(m);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold transition-colors"
+                        title="تحديد الموقع الجغرافي للعقار الآن"
                       >
-                        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                      </a>
+                        <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>تحديد الموقع</span>
+                      </button>
                     )}
 
                     {m.has_guard && (
@@ -249,6 +282,32 @@ export const MembersView: React.FC<MembersViewProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Interactive Location Picker Modal */}
+      {pickingMember && (
+        <LocationPickerModal
+          isOpen={Boolean(pickingMember)}
+          latitude={pickingMember.latitude != null ? Number(pickingMember.latitude) : null}
+          longitude={pickingMember.longitude != null ? Number(pickingMember.longitude) : null}
+          memberName={pickingMember.full_name}
+          streetNumber={pickingMember.street_number}
+          memberType={pickingMember.member_type}
+          onSave={async (lat, lng) => {
+            try {
+              await membersApi.update(pickingMember.id, {
+                latitude: lat,
+                longitude: lng,
+              });
+              setPickingMember(null);
+              fetchMembers();
+            } catch (err) {
+              console.error('Failed to update coordinates:', err);
+              alert('فشل حفظ إحداثيات الموقع');
+            }
+          }}
+          onClose={() => setPickingMember(null)}
+        />
       )}
     </div>
   );

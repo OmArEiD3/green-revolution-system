@@ -115,6 +115,14 @@ export const membersApi = {
     const res = await api.get(`/members/${id}/statement/`, { params: { year, month } });
     return res.data;
   },
+  getZone: async (): Promise<{ polygon: [number, number][] }> => {
+    const res = await api.get('/members/zone/');
+    return res.data;
+  },
+  saveZone: async (polygon: [number, number][]): Promise<{ success: boolean; polygon: [number, number][] }> => {
+    const res = await api.post('/members/zone/', { polygon });
+    return res.data;
+  },
 };
 
 export const practiceTypesApi = {

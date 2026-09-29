@@ -271,8 +271,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                       {p.member_name}
                     </h3>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
-                      <span className="font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                        <MapPin className="w-3 h-3 text-emerald-600" />
+                      <span className="font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                         شارع {p.street_number}
                       </span>
                       <span>• {p.practice_type_name}</span>

@@ -8,6 +8,7 @@ import { ReceiptsView } from './components/ReceiptsView';
 import { FinancialsView } from './components/FinancialsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
+import { LiveMapView } from './components/LiveMapView';
 import { LoginView } from './components/LoginView';
 import { AddMemberModal, EditMemberModal, AddPracticeModal, EditPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/modals';
 import { MemberDetailModal } from './components/MemberDetailModal';
@@ -167,6 +168,16 @@ export const App: React.FC = () => {
               setIsAddMemberOpen(true);
             }}
             onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
+          />
+        )}
+
+        {activeTab === 'map' && (
+          <LiveMapView
+            key={`map-${refreshKey}-${year}-${month}`}
+            year={year}
+            month={month}
+            onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
+            onRecordPayment={handleRecordPaymentForMember}
           />
         )}
 

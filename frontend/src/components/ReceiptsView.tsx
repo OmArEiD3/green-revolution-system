@@ -289,8 +289,7 @@ export const ReceiptsView: React.FC<ReceiptsViewProps> = ({
                     <h3 className="font-black text-slate-900 text-base group-hover:text-emerald-800 transition-colors line-clamp-1">
                       {rc.member_name}
                     </h3>
-                    <span className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 font-bold">
-                      <MapPin className="w-3 h-3 text-emerald-600" />
+                    <span className="text-xs text-slate-600 flex items-center gap-1 mt-0.5 font-bold">
                       شارع {rc.street_number} • {rc.practice_type_name}
                     </span>
                   </div>

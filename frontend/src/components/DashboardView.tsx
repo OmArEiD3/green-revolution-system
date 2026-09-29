@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, DollarSign, ReceiptText, TrendingUp, CheckCircle2, Clock, ShieldCheck, ArrowRight, Zap, CalendarPlus, Building2 } from 'lucide-react';
+import { Users, DollarSign, ReceiptText, TrendingUp, CheckCircle2, Clock, ShieldCheck, ArrowRight, Zap, CalendarPlus, Building2, Compass } from 'lucide-react';
 import { DashboardData } from '../types';
 import { reportsApi } from '../api/client';
 
@@ -119,7 +119,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center gap-2 w-full">
               <button
                 onClick={onOpenAddMember}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 backdrop-blur-md active:scale-95 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 backdrop-blur-md active:scale-95 transition-all"
               >
                 <Users className="w-3.5 h-3.5 text-emerald-300" />
                 <span>+ عضو</span>
@@ -127,10 +127,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <button
                 onClick={onOpenAddExpense}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 backdrop-blur-md active:scale-95 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/10 backdrop-blur-md active:scale-95 transition-all"
               >
                 <ReceiptText className="w-3.5 h-3.5 text-amber-300" />
                 <span>+ مصروف</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateTab('map')}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-bold text-xs border border-emerald-400/30 backdrop-blur-md active:scale-95 transition-all"
+              >
+                <Compass className="w-3.5 h-3.5 text-emerald-300" />
+                <span>الخريطة</span>
               </button>
             </div>
           </div>

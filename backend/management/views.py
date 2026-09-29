@@ -196,6 +196,43 @@ class MemberViewSet(viewsets.ModelViewSet):
             'receipts': ReceiptSerializer(receipts, many=True).data,
         })
 
+    @action(detail=False, methods=['get', 'post'], permission_classes=[AllowAny])
+    def zone(self, request):
+        """Get or update Green Revolution compound zone polygon coordinates.
+        Stored safely in a JSON file without altering existing database records.
+        """
+        import os
+        from django.conf import settings
+        zone_file = os.path.join(settings.BASE_DIR, 'media', 'green_revolution_zone.json')
+
+        if request.method == 'POST':
+            polygon = request.data.get('polygon', [])
+            if not isinstance(polygon, list) or len(polygon) < 3:
+                return Response({'error': 'يجب توفير 3 نقاط على الأقل لتحديد الزون'}, status=status.HTTP_400_BAD_REQUEST)
+            os.makedirs(os.path.dirname(zone_file), exist_ok=True)
+            with open(zone_file, 'w', encoding='utf-8') as f:
+                json.dump({'polygon': polygon, 'updated_at': timezone.now().isoformat()}, f, ensure_ascii=False, indent=2)
+            return Response({'success': True, 'polygon': polygon})
+
+        # GET
+        if os.path.exists(zone_file):
+            try:
+                with open(zone_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return Response(data)
+            except Exception:
+                pass
+
+        DEFAULT_ZONE = [
+            [30.0610, 30.9720],
+            [30.0645, 30.9880],
+            [30.0540, 31.0020],
+            [30.0390, 30.9950],
+            [30.0330, 30.9780],
+            [30.0420, 30.9650],
+        ]
+        return Response({'polygon': DEFAULT_ZONE})
+
 
 class PracticeTypeViewSet(viewsets.ModelViewSet):
     queryset = PracticeType.objects.filter(is_active=True)
