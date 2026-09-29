@@ -35,6 +35,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'current' | 'history' | 'payments' | 'receipts'>('current');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');   // ← أضف هذا السطر
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [zoneCoords, setZoneCoords] = useState<[number, number][]>([]);
   const [copiedCoords, setCopiedCoords] = useState(false);
@@ -225,11 +226,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 </span>
                 {m?.latitude != null && m?.longitude != null && zoneCoords.length >= 3 && (
                   <span
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
-                      isPointInPolygon([Number(m.latitude), Number(m.longitude)], zoneCoords)
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${isPointInPolygon([Number(m.latitude), Number(m.longitude)], zoneCoords)
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
                   >
                     {isPointInPolygon([Number(m.latitude), Number(m.longitude)], zoneCoords)
                       ? '✓ داخل زون الثورة الخضراء'
@@ -351,11 +351,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                   )}
 
                   <span
-                    className={`px-3 py-1 rounded-full font-black text-xs ${
-                      summary.status === 'FULLY_PAID'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-sm'
-                        : 'bg-rose-500/20 text-rose-300 border border-rose-400/40 shadow-sm'
-                    }`}
+                    className={`px-3 py-1 rounded-full font-black text-xs ${summary.status === 'FULLY_PAID'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-sm'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-400/40 shadow-sm'
+                      }`}
                   >
                     {summary.status === 'FULLY_PAID' ? '✓ تم السداد بالكامل' : 'غير مسدد'}
                   </span>
@@ -397,11 +396,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id as any)}
-              className={`pb-3 px-2 border-b-2 font-black transition-all ${
-                activeTab === t.id
-                  ? 'border-emerald-700 text-emerald-800'
-                  : 'border-transparent text-slate-400 hover:text-slate-700'
-              }`}
+              className={`pb-3 px-2 border-b-2 font-black transition-all ${activeTab === t.id
+                ? 'border-emerald-700 text-emerald-800'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
             >
               {t.label}
             </button>
@@ -453,11 +451,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                                 </button>
                               )}
                               <span
-                                className={`px-3 py-1 rounded-full text-xs font-black ${
-                                  p.payment_status === 'FULLY_PAID'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                }`}
+                                className={`px-3 py-1 rounded-full text-xs font-black ${p.payment_status === 'FULLY_PAID'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
+                                  }`}
                               >
                                 {p.payment_status === 'FULLY_PAID' ? '✓ مسدد' : 'غير مسدد'}
                               </span>
@@ -564,13 +561,12 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                           <span className="text-slate-500 text-[11px]">القيمة: {rc.receipt_amount} ج.م</span>
                         </div>
                         <span
-                          className={`px-3 py-1 rounded-full font-bold text-xs ${
-                            rc.status === 'DELIVERED'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : rc.status === 'RECEIVED'
+                          className={`px-3 py-1 rounded-full font-bold text-xs ${rc.status === 'DELIVERED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : rc.status === 'RECEIVED'
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-700'
-                          }`}
+                            }`}
                         >
                           {rc.status === 'DELIVERED' ? 'تم التسليم للعضو' : rc.status === 'RECEIVED' ? 'مستلم من الكهرباء' : 'لم يستلم بعد'}
                         </span>
