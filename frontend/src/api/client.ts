@@ -47,32 +47,56 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Fast in-memory cache to make tab-switching and navigation instantaneous
+const apiCache = new Map<string, { data: any; expiry: number }>();
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
+api.interceptors.response.use(
+  (response) => {
+    const method = response.config.method?.toLowerCase();
+    if (method && ['post', 'put', 'patch', 'delete'].includes(method)) {
+      clearApiCache();
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
 // The CSRF token rotates on login/logout (Django does this deliberately to
 // prevent session fixation), so force a refetch right after either happens.
 function resetCsrfToken() {
   csrfToken = null;
+  clearApiCache();
 }
 
 // The backend paginates list endpoints (50 items per page by default).
-// A plain "return res.data.results" only ever returns page 1, which silently
-// cuts off any list once it grows past the page size (e.g. members, practices,
-// payments). This helper follows the "next" link until every page has been
-// fetched, so callers always get the complete, real list.
+// With short-lived in-memory caching, repeated tab switching is instant (0ms).
 async function fetchAllPages<T>(url: string, params?: Record<string, any>): Promise<T[]> {
+  const cacheKey = `pages:${url}:${JSON.stringify(params || {})}`;
+  const cached = apiCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiry) {
+    return cached.data;
+  }
+
   let results: T[] = [];
   let page = 1;
   while (true) {
     const res = await api.get(url, { params: { ...params, page } });
     if (!res.data || res.data.results === undefined) {
-      // Not a paginated response (e.g. a plain array) - return as-is.
+      apiCache.set(cacheKey, { data: res.data, expiry: Date.now() + 20000 });
       return res.data;
     }
     results = results.concat(res.data.results);
     if (!res.data.next) break;
     page += 1;
   }
+  apiCache.set(cacheKey, { data: results, expiry: Date.now() + 20000 });
   return results;
 }
+
 
 export const authApi = {
   login: async (username: string, password: string) => {
@@ -230,13 +254,22 @@ export const financialApi = {
 
 export const reportsApi = {
   dashboard: async (year: number, month: number): Promise<DashboardData> => {
+    const cacheKey = `rep:dash:${year}:${month}`;
+    const cached = apiCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) return cached.data;
     const res = await api.get('/reports/dashboard/', { params: { year, month } });
+    apiCache.set(cacheKey, { data: res.data, expiry: Date.now() + 20000 });
     return res.data;
   },
   streets: async (year: number, month: number): Promise<{ year: number; month: number; streets: StreetData[] }> => {
+    const cacheKey = `rep:streets:${year}:${month}`;
+    const cached = apiCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) return cached.data;
     const res = await api.get('/reports/streets/', { params: { year, month } });
+    apiCache.set(cacheKey, { data: res.data, expiry: Date.now() + 20000 });
     return res.data;
   },
+
   commercial: async (params?: { year?: number | string; month?: number | string; date_from?: string; date_to?: string; search?: string }): Promise<CommercialReportResponse> => {
     const res = await api.get('/reports/commercial/', { params });
     return res.data;

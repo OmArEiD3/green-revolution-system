@@ -45,9 +45,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   const isCommercial = memberType === 'COMMERCIAL';
 
-  // Tile layers (Ultra-fast Google Hybrid Satellite + CartoDB Voyager Streets)
-  const streetTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  // Tile layers (Ultra-fast Google Hybrid Satellite + Google Maps Streets)
+  const streetTiles = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
   const satelliteTiles = 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+
 
 
   // Load zone coordinates

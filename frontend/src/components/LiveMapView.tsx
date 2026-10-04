@@ -20,12 +20,14 @@ import {
 interface LiveMapViewProps {
   year: number;
   month: number;
+  initialStreet?: number | string | null;
   onSelectMember: (memberId: number) => void;
   onRecordPayment?: (practiceId: number, memberId: number) => void;
 }
 
 // Al Thawra Al Khadraa / Sheikh Zayed Center Coordinates
 const DEFAULT_CENTER: [number, number] = [30.0485, 30.9850];
+
 
 // High-speed tile endpoints:
 // Google Hybrid (lyrs=y) = Satellite photography + crystal clear street names & villa labels in Egypt
@@ -39,11 +41,12 @@ const TILE_CONFIGS = {
   },
   streets: {
     name: 'خريطة شوارع 🗺️',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    maxZoom: 19,
-    attribution: '&copy; CARTO, OpenStreetMap',
+    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 20,
+    attribution: '&copy; Google Maps',
   },
+
   satellite: {
     name: 'قمر صناعي نقي 🌍',
     url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
@@ -58,6 +61,7 @@ type MapLayerType = 'hybrid' | 'streets' | 'satellite';
 export const LiveMapView: React.FC<LiveMapViewProps> = ({
   year,
   month,
+  initialStreet,
   onSelectMember,
   onRecordPayment,
 }) => {
@@ -84,12 +88,15 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
   // UI & Filter states
   const [mapType, setMapType] = useState<MapLayerType>('hybrid');
-  const [selectedStreet, setSelectedStreet] = useState<string>('ALL');
+  const [selectedStreet, setSelectedStreet] = useState<string>(
+    initialStreet ? String(initialStreet) : 'ALL'
+  );
   const [memberTypeFilter, setMemberTypeFilter] = useState<'ALL' | 'RESIDENTIAL' | 'COMMERCIAL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'DUE' | 'NO_COORDS'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [sidebarTab, setSidebarTab] = useState<'plotted' | 'unplotted'>('plotted');
+
 
   // Quick Pick & Edit States
   const [placingMember, setPlacingMember] = useState<Member | null>(null);
