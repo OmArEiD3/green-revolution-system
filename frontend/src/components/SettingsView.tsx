@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon, Shield, Database, Download, History,
   CheckCircle2, Upload, AlertTriangle, FileSearch, RefreshCw,
-  Layers, Users, Building2, DollarSign, Receipt, FileText, CheckCircle
+  Layers, Users, Building2, DollarSign, Receipt, FileText, CheckCircle,
+  KeyRound, Lock, Eye, EyeOff, Sparkles
 } from 'lucide-react';
-import { auditLogsApi, reportsApi } from '../api/client';
+import { auditLogsApi, reportsApi, authApi } from '../api/client';
 import { BackupInspectResult } from '../types';
+
 
 export const SettingsView: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -22,13 +24,58 @@ export const SettingsView: React.FC = () => {
   const [inspectResult, setInspectResult] = useState<BackupInspectResult | null>(null);
   const [inspectError, setInspectError] = useState('');
 
+  // Flexible Password Management State
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [systemUsers, setSystemUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string>('engineer');
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdSuccess, setPwdSuccess] = useState('');
+  const [pwdError, setPwdError] = useState('');
+
   useEffect(() => {
     auditLogsApi
       .list()
       .then(setAuditLogs)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    authApi
+      .listUsers()
+      .then((res) => {
+        if (res?.users) {
+          setSystemUsers(res.users);
+        }
+      })
+      .catch(console.error);
   }, []);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword === '') {
+      setPwdError('يرجى كتابة كلمة المرور الجديدة');
+      return;
+    }
+    setPwdLoading(true);
+    setPwdError('');
+    setPwdSuccess('');
+    try {
+      const target = systemUsers.find((u) => u.username === selectedUser);
+      if (target?.id) {
+        const res = await authApi.updateUserPassword(target.id, newPassword);
+        setPwdSuccess(res.message || 'تم تحديث كلمة المرور بنجاح!');
+      } else {
+        const res = await authApi.changePassword(newPassword);
+        setPwdSuccess(res.message || 'تم تحديث كلمة المرور بنجاح!');
+      }
+      setNewPassword('');
+    } catch (err: any) {
+      setPwdError(err.response?.data?.error || 'حدث خطأ أثناء تحديث كلمة المرور');
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
 
   const REQUIRED_PHRASE = 'نعم متأكد';
 
@@ -202,6 +249,102 @@ export const SettingsView: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Account & Flexible Password Management Card */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5 text-emerald-900 font-black text-sm">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+              <KeyRound className="w-4 h-4" />
+            </div>
+            <div>
+              <span>إدارة وتعيين كلمة المرور (حرية كاملة بدون قيود)</span>
+              <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+                يمكنك كتابة كلمة المرور كما ترغب تماماً: أرقام فقط (مثال: 1234)، أو حروف فقط، أو أي طول بدون أي شروط إجبارية
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-auto">
+            اختيار حر 100%
+          </span>
+        </div>
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">الحساب المطلوب تغيير كلمة مروره:</label>
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 cursor-pointer"
+              >
+                {systemUsers.length > 0 ? (
+                  systemUsers.map((u) => (
+                    <option key={u.id} value={u.username}>
+                      {u.first_name ? `${u.first_name} (${u.username})` : u.username}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="engineer">المهندس المسؤول (engineer)</option>
+                    <option value="admin">الإدارة العامة (admin)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">كلمة المرور الجديدة (أرقام فقط أو حروف أو رموز):</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="اكتب كلمة المرور كما تحب..."
+                  className="w-full pr-4 pl-10 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-mono text-right"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-3 top-2.5 text-slate-400 hover:text-emerald-700 p-0.5"
+                  title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {pwdError && (
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+              {pwdError}
+            </div>
+          )}
+
+          {pwdSuccess && (
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{pwdSuccess}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>تم إزالة كافة القيود الإجبارية المعقدة لتسهيل العمل الميداني للعميل.</span>
+            </div>
+            <button
+              type="submit"
+              disabled={pwdLoading}
+              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-950/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{pwdLoading ? 'جاري الحفظ...' : 'حفظ كلمة المرور الجديدة'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Restore & Inspection Panel */}

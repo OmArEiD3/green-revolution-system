@@ -45,9 +45,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   const isCommercial = memberType === 'COMMERCIAL';
 
-  // Tile layers
+  // Tile layers (Ultra-fast Google Hybrid Satellite + CartoDB Voyager Streets)
   const streetTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-  const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  const satelliteTiles = 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+
 
   // Load zone coordinates
   useEffect(() => {
@@ -108,9 +109,11 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
         const initialLayer = L.tileLayer(mapType === 'satellite' ? satelliteTiles : streetTiles, {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap, Esri',
+          maxZoom: 20,
+          subdomains: mapType === 'satellite' ? ['0', '1', '2', '3'] : 'abcd',
+          attribution: mapType === 'satellite' ? '&copy; Google Maps' : '&copy; CARTO, OpenStreetMap',
         }).addTo(map);
+
 
         tileLayerRef.current = initialLayer;
 
@@ -226,11 +229,13 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     if (mapInstanceRef.current && tileLayerRef.current) {
       mapInstanceRef.current.removeLayer(tileLayerRef.current);
       const newLayer = L.tileLayer(nextType === 'satellite' ? satelliteTiles : streetTiles, {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap, Esri',
+        maxZoom: 20,
+        subdomains: nextType === 'satellite' ? ['0', '1', '2', '3'] : 'abcd',
+        attribution: nextType === 'satellite' ? '&copy; Google Maps' : '&copy; CARTO, OpenStreetMap',
       }).addTo(mapInstanceRef.current);
       tileLayerRef.current = newLayer;
     }
+
   };
 
   // GPS Locate

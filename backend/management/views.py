@@ -11,8 +11,9 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -39,9 +40,10 @@ class AuthViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def login(self, request):
         username = request.data.get('username', '').strip()
-        password = request.data.get('password', '').strip()
+        # Do not strip password - keep exact characters entered (spaces, numbers, symbols, etc.)
+        password = request.data.get('password', '')
 
-        if not username or not password:
+        if not username or password is None or password == '':
             return Response({'success': False, 'error': 'يجب إدخال اسم المستخدم وكلمة المرور'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(request, username=username, password=password)
@@ -79,6 +81,76 @@ class AuthViewSet(viewsets.ViewSet):
     def logout(self, request):
         logout(request)
         return Response({'success': True, 'message': 'تم تسجيل الخروج بنجاح'})
+
+    @action(detail=False, methods=['get'])
+    def list_users(self, request):
+        """List system users for quick selection or password management."""
+        if not request.user.is_authenticated:
+            # Provide public display of active role names for login assistance
+            users = User.objects.filter(is_active=True).values('id', 'username', 'first_name')
+            return Response({'users': list(users)})
+        users = User.objects.filter(is_active=True).values('id', 'username', 'first_name', 'is_staff')
+        return Response({'users': list(users)})
+
+    @action(detail=False, methods=['post'])
+    def change_password(self, request):
+        """Change current user's password with complete freedom (numbers only, letters only, any length)."""
+        if not request.user.is_authenticated:
+            return Response({'error': 'يجب تسجيل الدخول أولاً لتغيير كلمة المرور'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        new_password = request.data.get('new_password', '')
+        if not new_password:
+            return Response({'error': 'يرجى إدخال كلمة المرور الجديدة'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.set_password(new_password)
+        user.save()
+        update_session_auth_hash(request, user)
+
+        AuditLog.objects.create(
+            user=user,
+            action='PASSWORD_CHANGED',
+            entity_name='User',
+            entity_id=user.id,
+            old_values={'username': user.username},
+            new_values={'password_updated': True}
+        )
+
+        return Response({
+            'success': True,
+            'message': 'تم تحديث كلمة المرور بنجاح وبدون أي قيود إجبارية'
+        })
+
+    @action(detail=False, methods=['post'])
+    def update_user_password(self, request):
+        """Allow staff/admin to set password for any user account without restrictions."""
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return Response({'error': 'غير مصرح لك بتعيين كلمات مرور للمستخدمين'}, status=status.HTTP_403_FORBIDDEN)
+
+        user_id = request.data.get('user_id')
+        new_password = request.data.get('new_password', '')
+
+        if not user_id or not new_password:
+            return Response({'error': 'يرجى تحديد المستخدم وكلمة المرور الجديدة'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_user = get_object_or_404(User, id=user_id)
+        target_user.set_password(new_password)
+        target_user.save()
+
+        AuditLog.objects.create(
+            user=request.user,
+            action='USER_PASSWORD_RESET',
+            entity_name='User',
+            entity_id=target_user.id,
+            old_values={'username': target_user.username},
+            new_values={'reset_by': request.user.username}
+        )
+
+        return Response({
+            'success': True,
+            'message': f'تم تعيين كلمة المرور الجديدة للمستخدم "{target_user.username}" بنجاح'
+        })
+
 
 
 class MemberViewSet(viewsets.ModelViewSet):

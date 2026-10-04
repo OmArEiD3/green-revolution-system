@@ -3,7 +3,7 @@ import {
   MapPin, Layers, Navigation, Compass, Search, Filter,
   Phone, Shield, User, ChevronLeft, ChevronRight, CheckCircle2,
   AlertTriangle, DollarSign, ExternalLink, Edit3, X, Eye, EyeOff,
-  Sparkles, Building2, Save, RotateCcw, Trash2
+  Sparkles, Building2, Save, RotateCcw, Trash2, CreditCard
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -26,6 +26,34 @@ interface LiveMapViewProps {
 
 // Al Thawra Al Khadraa / Sheikh Zayed Center Coordinates
 const DEFAULT_CENTER: [number, number] = [30.0485, 30.9850];
+
+// High-speed tile endpoints:
+// Google Hybrid (lyrs=y) = Satellite photography + crystal clear street names & villa labels in Egypt
+const TILE_CONFIGS = {
+  hybrid: {
+    name: 'قمر صناعي هجين 🛰️',
+    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 20,
+    attribution: '&copy; Google Maps',
+  },
+  streets: {
+    name: 'خريطة شوارع 🗺️',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxZoom: 19,
+    attribution: '&copy; CARTO, OpenStreetMap',
+  },
+  satellite: {
+    name: 'قمر صناعي نقي 🌍',
+    url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 20,
+    attribution: '&copy; Google Maps',
+  },
+};
+
+type MapLayerType = 'hybrid' | 'streets' | 'satellite';
 
 export const LiveMapView: React.FC<LiveMapViewProps> = ({
   year,
@@ -55,7 +83,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
   const [zoneEditVertices, setZoneEditVertices] = useState<CoordinatePair[]>([]);
 
   // UI & Filter states
-  const [mapType, setMapType] = useState<'satellite' | 'streets'>('satellite');
+  const [mapType, setMapType] = useState<MapLayerType>('hybrid');
   const [selectedStreet, setSelectedStreet] = useState<string>('ALL');
   const [memberTypeFilter, setMemberTypeFilter] = useState<'ALL' | 'RESIDENTIAL' | 'COMMERCIAL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'DUE' | 'NO_COORDS'>('ALL');
@@ -69,11 +97,19 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
   const [locatingUser, setLocatingUser] = useState<boolean>(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string>('');
 
-  // Tile endpoints
-  const streetTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-  const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  // Refs for map click handlers to prevent map recreation on state changes
+  const placingMemberRef = useRef<Member | null>(null);
+  const isEditingZoneRef = useRef<boolean>(false);
 
-  // Month names
+  useEffect(() => {
+    placingMemberRef.current = placingMember;
+  }, [placingMember]);
+
+  useEffect(() => {
+    isEditingZoneRef.current = isEditingZone;
+  }, [isEditingZone]);
+
+  // Month names in Arabic
   const monthNames = [
     '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
     'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
@@ -110,7 +146,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     }
   }, [zoneCoords, isEditingZone]);
 
-  // Map practice status per member
+  // Map practice financial status per member
   const memberFinancialStatus = useMemo(() => {
     const map = new Map<number, {
       status: 'FULLY_PAID' | 'PARTIAL' | 'UNPAID' | 'NO_PRACTICE';
@@ -179,7 +215,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const nameMatch = m.full_name.toLowerCase().includes(q);
+        const nameMatch = m.full_name?.toLowerCase().includes(q);
         const mobileMatch = m.mobile_number?.toLowerCase().includes(q);
         const guardMatch = m.guard_name?.toLowerCase().includes(q) || m.guard_mobile?.includes(q);
         const idMatch = String(m.id) === q;
@@ -199,20 +235,37 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     return filteredMembers.filter((m) => m.latitude == null || m.longitude == null);
   }, [filteredMembers]);
 
+  // Financial summary numbers for the top status pill
+  const financialTotals = useMemo(() => {
+    let totalReq = 0;
+    let totalCollected = 0;
+    let totalDue = 0;
+
+    practices.forEach((p) => {
+      if (!p.notes?.includes('[DELETED]')) {
+        totalReq += Number(p.required_amount || 0);
+        totalCollected += Number(p.total_paid || 0);
+        totalDue += Number(p.remaining_amount || 0);
+      }
+    });
+
+    return { totalReq, totalCollected, totalDue };
+  }, [practices]);
+
   // Create custom modern HTML pin for Leaflet
   const createMarkerIcon = (member: Member) => {
     const fin = memberFinancialStatus.get(member.id);
     const isCommercial = member.member_type === 'COMMERCIAL';
 
-    let pinColor = '#059669'; // Green (paid)
+    let pinColor = '#059669'; // Emerald Green (paid)
     let ringColor = 'rgba(16, 185, 129, 0.4)';
-    let badgeText = `${member.street_number}`;
+    const badgeText = `${member.street_number}`;
 
     if (isCommercial) {
-      pinColor = '#4f46e5'; // Deep Indigo (commercial)
+      pinColor = '#4f46e5'; // Indigo (commercial)
       ringColor = 'rgba(79, 70, 229, 0.45)';
     } else if (fin?.status === 'UNPAID') {
-      pinColor = '#e11d48'; // Red (unpaid)
+      pinColor = '#e11d48'; // Rose Red (unpaid)
       ringColor = 'rgba(225, 29, 72, 0.4)';
     } else if (fin?.status === 'PARTIAL') {
       pinColor = '#d97706'; // Amber (partial)
@@ -225,24 +278,24 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     return L.divIcon({
       className: 'live-map-custom-pin',
       html: `
-        <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s ease;">
-          <div style="position: absolute; width: 40px; height: 40px; border-radius: 50%; background: ${ringColor};"></div>
-          <div style="position: relative; width: 32px; height: 32px; background: ${pinColor}; border: 2.5px solid #ffffff; border-radius: 50%; box-shadow: 0 4px 14px rgba(0,0,0,0.38); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 11px; font-family: Cairo, sans-serif;">
+        <div style="position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+          <div style="position: absolute; width: 38px; height: 38px; border-radius: 50%; background: ${ringColor};"></div>
+          <div style="position: relative; width: 30px; height: 30px; background: ${pinColor}; border: 2.5px solid #ffffff; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 11px; font-family: Cairo, system-ui, sans-serif;">
             ${
               isCommercial
                 ? `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;">
-                     <span style="font-size: 8px; opacity: 0.85;">🏢</span>
-                     <span style="font-size: 10px;">${badgeText}</span>
+                     <span style="font-size: 8px;">🏢</span>
+                     <span style="font-size: 9px;">${badgeText}</span>
                    </div>`
                 : `<span>${badgeText}</span>`
             }
           </div>
-          <div style="position: absolute; bottom: 0px; left: 17px; width: 6px; height: 6px; background: ${pinColor}; transform: rotate(45deg); border-right: 1px solid white; border-bottom: 1px solid white;"></div>
+          <div style="position: absolute; bottom: 0px; left: 16px; width: 6px; height: 6px; background: ${pinColor}; transform: rotate(45deg); border-right: 1px solid white; border-bottom: 1px solid white;"></div>
         </div>
       `,
-      iconSize: [40, 40],
-      iconAnchor: [20, 38],
-      popupAnchor: [0, -38],
+      iconSize: [38, 38],
+      iconAnchor: [19, 36],
+      popupAnchor: [0, -36],
     });
   };
 
@@ -253,7 +306,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
       html: `
         <div style="position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: grab;">
           <div style="position: absolute; width: 26px; height: 26px; border-radius: 50%; background: rgba(16, 185, 129, 0.4); animation: pulse 1.5s infinite;"></div>
-          <div style="width: 20px; height: 20px; border-radius: 50%; background: #059669; border: 2.5px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 900; font-family: Cairo, sans-serif;">
+          <div style="width: 20px; height: 20px; border-radius: 50%; background: #059669; border: 2.5px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 900; font-family: Cairo, system-ui, sans-serif;">
             ${index + 1}
           </div>
         </div>
@@ -263,7 +316,32 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     });
   };
 
-  // Initialize Map
+  // Switch map layer safely and quickly
+  const applyTileLayer = (type: MapLayerType) => {
+    if (!mapInstanceRef.current) return;
+    const config = TILE_CONFIGS[type];
+
+    if (tileLayerRef.current) {
+      mapInstanceRef.current.removeLayer(tileLayerRef.current);
+    }
+
+    const newLayer = L.tileLayer(config.url, {
+      maxZoom: config.maxZoom,
+      subdomains: config.subdomains,
+      attribution: config.attribution,
+    }).addTo(mapInstanceRef.current);
+
+    // Keep tiles beneath markers
+    newLayer.bringToBack();
+    tileLayerRef.current = newLayer;
+  };
+
+  const handleSelectMapLayer = (type: MapLayerType) => {
+    setMapType(type);
+    applyTileLayer(type);
+  };
+
+  // Initialize Map ONCE on mount
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -271,34 +349,39 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
       center: DEFAULT_CENTER,
       zoom: 15,
       zoomControl: false,
+      preferCanvas: true, // Hardware-accelerated rendering
     });
 
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-    const initialLayer = L.tileLayer(mapType === 'satellite' ? satelliteTiles : streetTiles, {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap, Esri',
+    // Initial tile layer (Google Hybrid by default for speed & clarity)
+    const initialConfig = TILE_CONFIGS[mapType];
+    const initialLayer = L.tileLayer(initialConfig.url, {
+      maxZoom: initialConfig.maxZoom,
+      subdomains: initialConfig.subdomains,
+      attribution: initialConfig.attribution,
     }).addTo(map);
-
     tileLayerRef.current = initialLayer;
 
+    // Layer groups for markers
     const markersGroup = L.layerGroup().addTo(map);
     markersLayerRef.current = markersGroup;
 
     const verticesGroup = L.layerGroup().addTo(map);
     zoneVerticesLayerRef.current = verticesGroup;
 
-    // Handle map click
+    // Handle map clicks dynamically using current ref values
     map.on('click', async (e: L.LeafletMouseEvent) => {
       // 1. Placing member mode
-      if (placingMember) {
+      if (placingMemberRef.current) {
+        const targetMember = placingMemberRef.current;
         const { lat, lng } = e.latlng;
         try {
-          await membersApi.update(placingMember.id, {
+          await membersApi.update(targetMember.id, {
             latitude: lat,
             longitude: lng,
           });
-          setActionSuccessMsg(`تم تحديد موقع "${placingMember.full_name}" بنجاح!`);
+          setActionSuccessMsg(`تم تحديد موقع "${targetMember.full_name}" بنجاح!`);
           setTimeout(() => setActionSuccessMsg(''), 4000);
           setPlacingMember(null);
           await loadData();
@@ -309,7 +392,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
       }
 
       // 2. Editing Zone polygon vertices mode: clicking map adds a new point
-      if (isEditingZone) {
+      if (isEditingZoneRef.current) {
         const { lat, lng } = e.latlng;
         setZoneEditVertices((prev) => [...prev, [lat, lng]]);
       }
@@ -317,31 +400,28 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
     mapInstanceRef.current = map;
 
+    // Invalidate map size after DOM layout settles to prevent grey squares or layout lag
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    const handleResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [placingMember, isEditingZone]);
-
-  // Update Tile Layer when toggled
-  const handleToggleMapType = () => {
-    const next = mapType === 'satellite' ? 'streets' : 'satellite';
-    setMapType(next);
-    if (mapInstanceRef.current && tileLayerRef.current) {
-      mapInstanceRef.current.removeLayer(tileLayerRef.current);
-      const newLayer = L.tileLayer(next === 'satellite' ? satelliteTiles : streetTiles, {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap, Esri',
-      }).addTo(mapInstanceRef.current);
-      tileLayerRef.current = newLayer;
-    }
-  };
+  }, []); // Run ONLY once on mount!
 
   // Render Green Revolution Zone Polygon
   useEffect(() => {
     if (!mapInstanceRef.current) return;
 
-    // Clean up previous polygon layer
     if (zonePolygonLayerRef.current) {
       mapInstanceRef.current.removeLayer(zonePolygonLayerRef.current);
       zonePolygonLayerRef.current = null;
@@ -355,11 +435,11 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
         weight: isEditingZone ? 3.5 : 2.5,
         dashArray: isEditingZone ? '4, 4' : '6, 6',
         fillColor: isEditingZone ? '#f59e0b' : '#10b981',
-        fillOpacity: isEditingZone ? 0.18 : 0.12,
+        fillOpacity: isEditingZone ? 0.2 : 0.12,
       }).addTo(mapInstanceRef.current);
 
       polygon.bindTooltip(
-        isEditingZone ? '✏️ جاري تعديل زون الثورة الخضراء' : '🌿 منطقة الثورة الخضراء',
+        isEditingZone ? '✏️ جاري تعديل زون الثورة الخضراء' : '🌿 منطقة الثورة الخضراء (الشوارع 1 - 20)',
         { sticky: true }
       );
 
@@ -390,9 +470,8 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
         });
       });
 
-      // Right-click or popup click to delete vertex
       marker.bindPopup(`
-        <div style="direction: rtl; text-align: center; font-family: Cairo, sans-serif; padding: 4px;">
+        <div style="direction: rtl; text-align: center; font-family: Cairo, system-ui, sans-serif; padding: 4px;">
           <div style="font-weight: 800; font-size: 11px; margin-bottom: 4px;">نقطة الزون #${idx + 1}</div>
           <button id="btn-del-vertex-${idx}" style="background: #e11d48; color: white; border: none; border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 800; cursor: pointer;">
             🗑️ حذف هذه النقطة
@@ -450,20 +529,16 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     }
   };
 
-  // Render Plotted Member Markers
+  // Render Plotted Member Markers efficiently
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
 
     markersLayerRef.current.clearLayers();
 
-    const bounds: L.LatLngExpression[] = [];
-
     plottedMembers.forEach((member) => {
       const lat = Number(member.latitude);
       const lng = Number(member.longitude);
       if (isNaN(lat) || isNaN(lng)) return;
-
-      bounds.push([lat, lng]);
 
       const fin = memberFinancialStatus.get(member.id);
       const isCommercial = member.member_type === 'COMMERCIAL';
@@ -474,7 +549,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
       // Construct interactive popup content
       const popupHtml = `
-        <div style="direction: rtl; text-align: right; font-family: Cairo, sans-serif; min-width: 250px; max-width: 290px; padding: 4px;">
+        <div style="direction: rtl; text-align: right; font-family: Cairo, system-ui, sans-serif; min-width: 250px; max-width: 290px; padding: 4px;">
           <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px;">
             <div>
               <div style="font-weight: 900; font-size: 14px; color: #0f172a;">${member.full_name}</div>
@@ -530,13 +605,25 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
               : ''
           }
 
-          <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 6px;">
+          <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 6px;">
             <button
               id="btn-statement-${member.id}"
               style="width: 100%; padding: 6px; border-radius: 8px; background: #059669; color: white; border: none; font-weight: 800; font-size: 11px; cursor: pointer;"
             >
               📄 كشف الحساب والمستحقات
             </button>
+
+            ${
+              onRecordPayment && fin?.practiceId
+                ? `<button
+                    id="btn-quick-pay-${member.id}"
+                    style="width: 100%; padding: 6px; border-radius: 8px; background: #2563eb; color: white; border: none; font-weight: 800; font-size: 11px; cursor: pointer;"
+                  >
+                    💵 تسجيل دفعة سريعة
+                  </button>`
+                : ''
+            }
+
             <div style="display: flex; gap: 4px;">
               <a
                 href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}"
@@ -544,7 +631,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
                 rel="noreferrer"
                 style="flex: 1; text-align: center; padding: 5px; border-radius: 8px; background: #f1f5f9; color: #334155; text-decoration: none; font-weight: 700; font-size: 10px;"
               >
-                🧭 توجيه عبر GPS
+                🧭 توجيه GPS
               </a>
               <button
                 id="btn-editloc-${member.id}"
@@ -566,6 +653,12 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
         if (stmtBtn) {
           stmtBtn.onclick = () => onSelectMember(member.id);
         }
+
+        const payBtn = document.getElementById(`btn-quick-pay-${member.id}`);
+        if (payBtn && onRecordPayment && fin?.practiceId) {
+          payBtn.onclick = () => onRecordPayment(fin.practiceId!, member.id);
+        }
+
         const editLocBtn = document.getElementById(`btn-editloc-${member.id}`);
         if (editLocBtn) {
           editLocBtn.onclick = () => setEditingMemberLocation(member);
@@ -574,38 +667,40 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
       markersLayerRef.current?.addLayer(marker);
     });
-  }, [plottedMembers, memberFinancialStatus, mapType, placingMember]);
+  }, [plottedMembers, memberFinancialStatus, onRecordPayment]);
 
-  // Center on compound zone
+  // Center on compound zone or plotted members
   const handleCenterCompound = () => {
-    if (mapInstanceRef.current) {
-      if (zoneCoords.length >= 3) {
-        const bounds = L.latLngBounds(zoneCoords as L.LatLngExpression[]);
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-      } else {
-        mapInstanceRef.current.setView(DEFAULT_CENTER, 15);
-      }
+    if (!mapInstanceRef.current) return;
+
+    if (plottedMembers.length > 0) {
+      const bounds = L.latLngBounds(plottedMembers.map((m) => [Number(m.latitude), Number(m.longitude)]));
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+    } else if (zoneCoords.length >= 3) {
+      const bounds = L.latLngBounds(zoneCoords as L.LatLngExpression[]);
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    } else {
+      mapInstanceRef.current.setView(DEFAULT_CENTER, 15);
     }
   };
 
-  // Fly to a specific member
+  // Fly smoothly to a specific member
   const handleFlyToMember = (member: Member) => {
     if (member.latitude != null && member.longitude != null && mapInstanceRef.current) {
       const lat = Number(member.latitude);
       const lng = Number(member.longitude);
       mapInstanceRef.current.flyTo([lat, lng], 18, {
-        duration: 1.2,
+        duration: 1.0,
       });
 
       if (markersLayerRef.current) {
         markersLayerRef.current.eachLayer((layer: any) => {
           if (layer.getLatLng && Math.abs(layer.getLatLng().lat - lat) < 0.00001 && Math.abs(layer.getLatLng().lng - lng) < 0.00001) {
-            setTimeout(() => layer.openPopup(), 1250);
+            setTimeout(() => layer.openPopup(), 1050);
           }
         });
       }
 
-      // On small screens, close the drawer when clicking a member
       if (window.innerWidth < 640) {
         setIsSidebarOpen(false);
       }
@@ -641,14 +736,14 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
             });
 
             const marker = L.marker([latitude, longitude], { icon: userIcon }).addTo(mapInstanceRef.current);
-            marker.bindPopup('<div style="text-align: center; font-weight: bold; font-family: Cairo;">📍 موقعك الحالي</div>');
+            marker.bindPopup('<div style="text-align: center; font-weight: bold; font-family: Cairo;">📍 موقعك الميداني الحالي</div>');
             userLocationMarkerRef.current = marker;
           }
         }
         setLocatingUser(false);
       },
       () => {
-        alert('تعذر الوصول إلى موقع GPS الحالي. يرجى التأكد من تفعيل الصلاحية.');
+        alert('تعذر الوصول إلى موقع GPS الحالي. يرجى التأكد من تفعيل صلاحية الموقع.');
         setLocatingUser(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -656,48 +751,78 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-130px)] min-h-[550px] rounded-3xl overflow-hidden border border-slate-200/90 shadow-2xl flex flex-col bg-slate-100">
+    <div className="relative w-full h-[calc(100vh-130px)] min-h-[550px] rounded-3xl overflow-hidden border border-slate-200/90 shadow-2xl flex flex-col bg-slate-900 selection:bg-emerald-500">
       
-      {/* Top Floating Control Bar (Responsive) */}
+      {/* Top Floating Control Bar */}
       <div className="absolute top-2.5 sm:top-3 left-2.5 sm:left-3 right-2.5 sm:right-3 z-30 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 pointer-events-none">
+        
         {/* Left Action Pills */}
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto flex-wrap">
+          {/* Drawer Toggle */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-slate-800 font-black text-xs shadow-xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-slate-800 font-black text-xs shadow-xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 cursor-pointer"
           >
             <Filter className="w-3.5 h-3.5 text-emerald-700" />
             <span>العقارات ({plottedMembers.length})</span>
             {isSidebarOpen ? <ChevronRight className="w-3 h-3 text-slate-400" /> : <ChevronLeft className="w-3 h-3 text-slate-400" />}
           </button>
 
-          <button
-            onClick={handleToggleMapType}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-slate-800 font-black text-xs shadow-xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
-            title="تبديل طبقة الخريطة"
-          >
-            <Layers className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="hidden sm:inline">{mapType === 'satellite' ? 'قمر صناعي 🛰️' : 'شوارع 🗺️'}</span>
-          </button>
+          {/* Layer Switcher Buttons */}
+          <div className="flex items-center bg-white/95 backdrop-blur-md p-0.5 rounded-2xl border border-slate-200 shadow-xl">
+            <button
+              onClick={() => handleSelectMapLayer('hybrid')}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                mapType === 'hybrid'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="قمر صناعي هجين فائق السرعة مع أسماء الشوارع"
+            >
+              🛰️ هجين
+            </button>
+            <button
+              onClick={() => handleSelectMapLayer('streets')}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                mapType === 'streets'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="خريطة شوارع حديثة تفصيلية"
+            >
+              🗺️ شوارع
+            </button>
+            <button
+              onClick={() => handleSelectMapLayer('satellite')}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer hidden sm:block ${
+                mapType === 'satellite'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="قمر صناعي نقي بدون أسماء"
+            >
+              🌍 نقي
+            </button>
+          </div>
 
           {/* Toggle Zone Visibility */}
           <button
             onClick={() => setShowZone(!showZone)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md font-black text-xs shadow-xl border transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md font-black text-xs shadow-xl border transition-all active:scale-95 cursor-pointer ${
               showZone
                 ? 'bg-emerald-50/95 text-emerald-900 border-emerald-300'
                 : 'bg-white/95 text-slate-600 border-slate-200'
             }`}
-            title="إظهار أو إخفاء زون الثورة الخضراء"
+            title="إظهار أو إخفاء حدود زون الثورة الخضراء"
           >
             {showZone ? <Eye className="w-3.5 h-3.5 text-emerald-700" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
-            <span>زون الثورة الخضراء</span>
+            <span className="hidden sm:inline">زون الثورة الخضراء</span>
           </button>
 
           {/* Manual Zone Edit Mode Trigger */}
           <button
             onClick={() => setIsEditingZone(!isEditingZone)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md font-black text-xs shadow-xl border transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md font-black text-xs shadow-xl border transition-all active:scale-95 cursor-pointer ${
               isEditingZone
                 ? 'bg-amber-600 text-white border-amber-400 animate-pulse'
                 : 'bg-white/95 text-slate-800 border-slate-200 hover:bg-slate-50'
@@ -705,22 +830,24 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
             title="تحديد وتعديل حدود زون الثورة الخضراء يدوياً"
           >
             <Edit3 className="w-3.5 h-3.5 text-amber-500" />
-            <span>{isEditingZone ? 'إنهاء التعديل' : 'تعديل الزون يدوياً'}</span>
+            <span className="hidden sm:inline">{isEditingZone ? 'إنهاء التعديل' : 'تعديل الزون'}</span>
           </button>
 
+          {/* Center Map */}
           <button
             onClick={handleCenterCompound}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-slate-800 font-bold text-xs shadow-xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
-            title="توسيط الخريطة على الثورة الخضراء"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-slate-800 font-bold text-xs shadow-xl border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 cursor-pointer"
+            title="توسيط الخريطة على العقارات الموقعة"
           >
             <Compass className="w-3.5 h-3.5 text-slate-600" />
-            <span>توسيط</span>
+            <span className="hidden sm:inline">توسيط</span>
           </button>
 
+          {/* GPS Locate User */}
           <button
             onClick={handleGPSUser}
             disabled={locatingUser}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50/95 backdrop-blur-md text-emerald-900 border border-emerald-300 font-black text-xs shadow-xl hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-60"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50/95 backdrop-blur-md text-emerald-900 border border-emerald-300 font-black text-xs shadow-xl hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
             title="موقعي الحالي الميداني GPS"
           >
             <Navigation className={`w-3.5 h-3.5 text-emerald-700 ${locatingUser ? 'animate-spin' : ''}`} />
@@ -728,8 +855,18 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           </button>
         </div>
 
-        {/* Right Status Badge */}
+        {/* Right Status Badges */}
         <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="hidden lg:flex items-center gap-3 bg-slate-900/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold">
+            <span className="text-emerald-400">
+              موقع: {plottedMembers.length}/{members.length}
+            </span>
+            <span className="text-slate-500">|</span>
+            <span className="text-amber-300">
+              المتبقي: {financialTotals.totalDue.toLocaleString()} ج.م
+            </span>
+          </div>
+
           <div className="flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl shadow-xl border border-slate-700 text-[11px] sm:text-xs font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
             <span className="hidden sm:inline">الخريطة الحية</span>
@@ -754,7 +891,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
             <button
               onClick={handleSaveZone}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-colors"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-colors cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
               <span>حفظ الزون</span>
@@ -762,7 +899,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
             <button
               onClick={() => setZoneEditVertices([])}
-              className="px-2.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-700 text-white font-bold text-xs transition-colors"
+              className="px-2.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
               title="مسح النقاط والبدء من جديد"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -770,7 +907,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
             <button
               onClick={handleResetZone}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-colors"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
               title="إعادة تعيين إلى الحدود الافتراضية للثورة الخضراء"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -781,7 +918,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
                 setZoneEditVertices(zoneCoords);
                 setIsEditingZone(false);
               }}
-              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs transition-colors cursor-pointer"
             >
               إلغاء
             </button>
@@ -802,7 +939,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           </div>
           <button
             onClick={() => setPlacingMember(null)}
-            className="w-7 h-7 rounded-xl bg-black/20 hover:bg-black/30 flex items-center justify-center text-white shrink-0"
+            className="w-7 h-7 rounded-xl bg-black/20 hover:bg-black/30 flex items-center justify-center text-white shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -829,15 +966,15 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-emerald-500 border border-white"></span>
-            <span>سكني: مسدد بالكامل لهذا الشهر</span>
+            <span>مسدد بالكامل لهذا الشهر</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-amber-500 border border-white"></span>
-            <span>سكني: سداد جزئي</span>
+            <span>سداد جزئي</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-rose-600 border border-white"></span>
-            <span>سكني: مستحق الدفع / متبقي</span>
+            <span>مستحق الدفع / متبقي</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-indigo-500 border border-white"></span>
@@ -854,11 +991,11 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="sm:hidden fixed inset-0 z-30 bg-black/40 backdrop-blur-xs transition-opacity"
+          className="sm:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-xs transition-opacity"
         />
       )}
 
-      {/* Floating Side Drawer / Property Panel (Fully Responsive) */}
+      {/* Floating Side Drawer / Property Panel */}
       <div
         className={`absolute top-14 sm:top-16 right-2 sm:right-3 bottom-2 sm:bottom-3 w-[calc(100%-16px)] sm:w-96 max-w-sm z-30 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 ${
           isSidebarOpen ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-[110%] opacity-0 pointer-events-none'
@@ -879,7 +1016,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           </div>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -889,7 +1026,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
         <div className="grid grid-cols-2 p-1.5 bg-slate-100 border-b border-slate-200 text-xs font-black shrink-0">
           <button
             onClick={() => setSidebarTab('plotted')}
-            className={`py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               sidebarTab === 'plotted'
                 ? 'bg-white text-emerald-800 shadow-sm border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900'
@@ -900,7 +1037,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
           </button>
           <button
             onClick={() => setSidebarTab('unplotted')}
-            className={`py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               sidebarTab === 'unplotted'
                 ? 'bg-white text-amber-800 shadow-sm border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900'
@@ -995,7 +1132,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
                             : 'bg-rose-50 text-rose-700'
                         }`}
                       >
-                        {isCommercial ? 'تجاري' : fin?.status === 'FULLY_PAID' ? 'مسدد' : fin?.status === 'PARTIAL' ? 'جزئي' : 'مستحق'}
+                        ${isCommercial ? 'تجاري' : fin?.status === 'FULLY_PAID' ? 'مسدد' : fin?.status === 'PARTIAL' ? 'جزئي' : 'مستحق'}
                       </span>
                     </div>
 
@@ -1039,7 +1176,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
                       setPlacingMember(m);
                       setIsSidebarOpen(false);
                     }}
-                    className="flex-1 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm transition-colors"
+                    className="flex-1 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
                   >
                     <MapPin className="w-3.5 h-3.5" />
                     <span>تحديد بالنقر على الخريطة</span>
@@ -1047,7 +1184,7 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
 
                   <button
                     onClick={() => setEditingMemberLocation(m)}
-                    className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-[11px] transition-colors"
+                    className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-[11px] transition-colors cursor-pointer"
                     title="فتح نافذة التحديد التفصيلية"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
@@ -1094,3 +1231,5 @@ export const LiveMapView: React.FC<LiveMapViewProps> = ({
     </div>
   );
 };
+
+export default LiveMapView;

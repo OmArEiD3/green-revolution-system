@@ -89,7 +89,20 @@ export const authApi = {
     resetCsrfToken();
     return res.data;
   },
+  listUsers: async () => {
+    const res = await api.get('/auth/list_users/');
+    return res.data;
+  },
+  changePassword: async (newPassword: string) => {
+    const res = await api.post('/auth/change_password/', { new_password: newPassword });
+    return res.data;
+  },
+  updateUserPassword: async (userId: number, newPassword: string) => {
+    const res = await api.post('/auth/update_user_password/', { user_id: userId, new_password: newPassword });
+    return res.data;
+  },
 };
+
 
 export const membersApi = {
   list: async (params?: { street?: number | string; search?: string; is_active?: boolean; member_type?: 'RESIDENTIAL' | 'COMMERCIAL' | 'ALL' }) => {
