@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Home, Users, MapPin, DollarSign, ReceiptText,
   ShieldCheck, FileSpreadsheet, LogOut, Calendar, Sparkles, Settings,
-  Building2, Compass, MoreHorizontal, X
+  Building2, Compass, MoreHorizontal, X, Truck
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -45,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'members', label: 'الأعضاء', icon: Users },
+    { id: 'delivery', label: 'خط السير', icon: Truck },
     { id: 'map', label: 'الخريطة الحية', icon: Compass },
     { id: 'commercial', label: 'تجاري', icon: Building2 },
     { id: 'streets', label: 'الشوارع', icon: MapPin },
@@ -173,6 +174,7 @@ export const BottomNav: React.FC<{
 
   // Secondary Tabs in "المزيد" Drawer
   const secondaryTabs = [
+    { id: 'delivery', label: 'خط السير والتسليم', desc: 'توزيع الإيصالات وترتيب وتوجيه خط السير', icon: Truck },
     { id: 'commercial', label: 'النشاط التجاري المستقل', desc: 'إدارة الجهات التجارية والشركات', icon: Building2 },
     { id: 'streets', label: 'توزيع الشوارع (1 - 20)', desc: 'استعراض الشوارع والعقارات التابعة', icon: MapPin },
     { id: 'receipts', label: 'إدارة الإيصالات والتسليم', desc: 'متابعة أرقام الإيصالات وصور السندات', icon: ReceiptText },

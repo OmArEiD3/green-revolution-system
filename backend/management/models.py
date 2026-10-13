@@ -281,3 +281,72 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} on {self.entity_name} #{self.entity_id} at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class DeliveryStop(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'قيد التسليم'),
+        ('DELIVERED', 'تم التسليم'),
+    ]
+
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name='delivery_stops',
+        verbose_name="العضو"
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name="العضو الرئيسي / التابع له"
+    )
+    year = models.IntegerField(verbose_name="السنة", db_index=True)
+    month = models.IntegerField(
+        choices=Practice.MONTH_CHOICES,
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+        verbose_name="الشهر",
+        db_index=True
+    )
+    position = models.IntegerField(default=0, verbose_name="الترتيب في خط السير")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+        verbose_name="حالة التسليم"
+    )
+    delivered_at = models.DateTimeField(null=True, blank=True, verbose_name="تاريخ ووقت التسليم")
+    delivered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='delivered_stops',
+        verbose_name="تم التسليم بواسطة"
+    )
+    receipt_synced = models.BooleanField(default=False, verbose_name="تم مزامنة حالة الإيصال")
+    notes = models.TextField(blank=True, verbose_name="ملاحظات")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التعديل")
+
+    class Meta:
+        verbose_name = "محطة خط السير"
+        verbose_name_plural = "خط السير والتسليم"
+        ordering = ['position', 'id']
+        unique_together = ('member', 'year', 'month')
+
+    def __str__(self):
+        return f"{self.member.full_name} ({self.month}/{self.year}) - #{self.position} [{self.get_status_display()}]"
+
+    def delete(self, *args, **kwargs):
+        first_child = self.children.order_by('id').first()
+        if first_child:
+            first_child.parent = None
+            first_child.position = self.position
+            first_child.save()
+            self.children.exclude(id=first_child.id).update(parent=first_child)
+        super().delete(*args, **kwargs)
+

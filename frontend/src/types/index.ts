@@ -240,3 +240,92 @@ export interface BackupInspectResult {
   message: string;
 }
 
+export interface DeliveryMergedMember {
+  id: number;
+  member: number;
+  member_name: string;
+  member_type: 'RESIDENTIAL' | 'COMMERCIAL';
+  member_type_display: string;
+  street_number: number;
+  mobile_number: string;
+  has_guard: boolean;
+  guard_name: string;
+  guard_mobile: string;
+  guard_mobile_2: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  status: 'PENDING' | 'DELIVERED';
+  receipt_id: number | null;
+  receipt_number: string;
+  receipt_amount: string;
+  receipt_status: 'NOT_RECEIVED' | 'RECEIVED' | 'DELIVERED' | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryStop {
+  id: number;
+  member: number;
+  parent: number | null;
+  year: number;
+  month: number;
+  position: number;
+  status: 'PENDING' | 'DELIVERED';
+  delivered_at: string | null;
+  delivered_by: number | null;
+  delivered_by_name: string | null;
+  receipt_synced: boolean;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+
+  member_name: string;
+  member_type: 'RESIDENTIAL' | 'COMMERCIAL';
+  member_type_display: string;
+  street_number: number;
+  mobile_number: string;
+  has_guard: boolean;
+  guard_name: string;
+  guard_mobile: string;
+  guard_mobile_2: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+
+  receipt_id: number | null;
+  receipt_number: string;
+  receipt_amount: string;
+  receipt_status: 'NOT_RECEIVED' | 'RECEIVED' | 'DELIVERED' | null;
+
+  merged: DeliveryMergedMember[];
+  group_members_count: number;
+  group_total_amount: string;
+}
+
+export interface DeliveryAutoMergeGroup {
+  guard_mobile: string;
+  guard_name: string;
+  primary: {
+    id: number;
+    member_name: string;
+    street_number: number;
+    position: number;
+  };
+  members: Array<{
+    id: number;
+    member_name: string;
+    street_number: number;
+  }>;
+}
+
+export interface DeliveryAutoMergeResponse {
+  dry_run: boolean;
+  groups_count?: number;
+  members_count?: number;
+  merged_groups_count?: number;
+  merged_members_count?: number;
+  groups?: DeliveryAutoMergeGroup[];
+  message?: string;
+}
+
+

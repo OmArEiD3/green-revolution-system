@@ -1,7 +1,8 @@
 import axios from 'axios';
 import {
   Member, Receipt, Practice, PracticeType, DashboardData,
-  StreetData, MemberStatement, CommercialReportResponse, BackupInspectResult
+  StreetData, MemberStatement, CommercialReportResponse, BackupInspectResult,
+  DeliveryStop, DeliveryAutoMergeResponse
 } from '../types';
 
 const api = axios.create({
@@ -305,6 +306,80 @@ export const reportsApi = {
 export const auditLogsApi = {
   list: async () => {
     return fetchAllPages<any>('/audit-logs/');
+  },
+};
+
+export const deliveryApi = {
+  list: async (params?: {
+    year?: number;
+    month?: number;
+    status?: string;
+    search?: string;
+    street?: number | string;
+    member_type?: string;
+    flat?: number | boolean;
+  }): Promise<DeliveryStop[]> => {
+    const res = await api.get('/delivery-stops/', { params });
+    return Array.isArray(res.data) ? res.data : (res.data?.results || []);
+  },
+  create: async (data: {
+    member: number;
+    year: number;
+    month: number;
+    position?: number;
+    notes?: string;
+  }): Promise<DeliveryStop> => {
+    const res = await api.post('/delivery-stops/', data);
+    return res.data;
+  },
+  bulkAdd: async (data: {
+    year: number;
+    month: number;
+    source: 'receipts' | 'all';
+    street?: number | string;
+    member_type?: string;
+  }): Promise<{ added_count: number; message: string }> => {
+    const res = await api.post('/delivery-stops/bulk_add/', data);
+    return res.data;
+  },
+  reorder: async (ids: number[]): Promise<{ success: boolean; message?: string }> => {
+    const res = await api.post('/delivery-stops/reorder/', { ids });
+    return res.data;
+  },
+  move: async (id: number, data: { to?: 'top' | 'up' | 'down' | 'bottom'; position?: number }): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/move/`, data);
+    return res.data;
+  },
+  deliver: async (id: number, data?: { sync_receipt?: boolean; notes?: string }): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/deliver/`, data || {});
+    return res.data;
+  },
+  undoDelivery: async (id: number): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/undo_delivery/`);
+    return res.data;
+  },
+  merge: async (id: number, data: { member_ids?: number[]; stop_ids?: number[] }): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/merge/`, data);
+    return res.data;
+  },
+  unmerge: async (id: number, data?: { child_id?: number }): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/unmerge/`, data || {});
+    return res.data;
+  },
+  makePrimary: async (id: number, data?: { new_primary_id?: number }): Promise<DeliveryStop> => {
+    const res = await api.post(`/delivery-stops/${id}/make_primary/`, data || {});
+    return res.data;
+  },
+  autoMergeGuard: async (data: {
+    year: number;
+    month: number;
+    dry_run?: boolean;
+  }): Promise<DeliveryAutoMergeResponse> => {
+    const res = await api.post('/delivery-stops/auto_merge_guard/', data);
+    return res.data;
+  },
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/delivery-stops/${id}/`);
   },
 };
 

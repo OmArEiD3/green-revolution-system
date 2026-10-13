@@ -1,8 +1,9 @@
 import io
 import json
+import re
 from decimal import Decimal
 from django.db import transaction
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Prefetch, Max, F
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.core import serializers as django_serializers
@@ -20,12 +21,13 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from .models import (
     Member, PracticeType, Practice, Payment, Receipt,
-    Expense, FinancialTransaction, AuditLog
+    Expense, FinancialTransaction, AuditLog, DeliveryStop
 )
 from .serializers import (
     MemberSerializer, PracticeTypeSerializer, PracticeSerializer,
     PaymentSerializer, ReceiptSerializer, ExpenseSerializer,
-    FinancialTransactionSerializer, AuditLogSerializer
+    FinancialTransactionSerializer, AuditLogSerializer,
+    DeliveryStopSerializer, DeliveryMergedMemberSerializer
 )
 from .services import FinancialService
 
@@ -1120,7 +1122,7 @@ class ReportViewSet(viewsets.ViewSet):
     # order, delete in reverse) to avoid foreign-key errors.
     BACKUP_MODELS_ORDER = [
         Member, PracticeType, Practice, Payment, Receipt, Expense,
-        FinancialTransaction, AuditLog,
+        FinancialTransaction, DeliveryStop, AuditLog,
     ]
 
     @action(detail=False, methods=['get'])
@@ -1129,7 +1131,11 @@ class ReportViewSet(viewsets.ViewSet):
         auth/session tables for security - no password hashes in this file)."""
         all_objects = []
         for model in self.BACKUP_MODELS_ORDER:
-            all_objects.extend(model.objects.all())
+            if model == DeliveryStop:
+                all_objects.extend(model.objects.filter(parent__isnull=True).order_by('position', 'id'))
+                all_objects.extend(model.objects.filter(parent__isnull=False).order_by('id'))
+            else:
+                all_objects.extend(model.objects.all())
 
         data = django_serializers.serialize('json', all_objects, indent=2)
         timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
@@ -1162,6 +1168,7 @@ class ReportViewSet(viewsets.ViewSet):
             'expenses': 0,
             'transactions': 0,
             'audit_logs': 0,
+            'delivery_stops': 0,
             'other': 0,
         }
 
@@ -1194,6 +1201,8 @@ class ReportViewSet(viewsets.ViewSet):
                 counts['transactions'] += 1
             elif model_name == 'auditlog':
                 counts['audit_logs'] += 1
+            elif model_name == 'deliverystop':
+                counts['delivery_stops'] += 1
             else:
                 counts['other'] += 1
 
@@ -1240,14 +1249,25 @@ class ReportViewSet(viewsets.ViewSet):
         # anything, in case the wrong file was uploaded by mistake.
         safety_objects = []
         for model in self.BACKUP_MODELS_ORDER:
-            safety_objects.extend(model.objects.all())
+            if model == DeliveryStop:
+                safety_objects.extend(model.objects.filter(parent__isnull=True).order_by('position', 'id'))
+                safety_objects.extend(model.objects.filter(parent__isnull=False).order_by('id'))
+            else:
+                safety_objects.extend(model.objects.all())
         safety_snapshot = django_serializers.serialize('json', safety_objects, indent=2)
+
+        # Sort deserialized objects so parent DeliveryStops precede child DeliveryStops
+        def sort_key(d_obj):
+            if isinstance(d_obj.object, DeliveryStop) and d_obj.object.parent_id is not None:
+                return 1
+            return 0
+        sorted_objects = sorted(deserialized_objects, key=sort_key)
 
         try:
             with transaction.atomic():
                 for model in reversed(self.BACKUP_MODELS_ORDER):
                     model.objects.all().delete()
-                for obj in deserialized_objects:
+                for obj in sorted_objects:
                     obj.save()
         except Exception as e:
             # transaction.atomic() has already rolled back any partial
@@ -1271,3 +1291,596 @@ class ReportViewSet(viewsets.ViewSet):
             'safety_snapshot': safety_snapshot,
             'safety_snapshot_filename': f'green_revolution_SAFETY_before_restore_{timestamp}.json',
         })
+
+
+def renumber_pending_stops(year, month):
+    stops = list(DeliveryStop.objects.filter(
+        year=year, month=month, status='PENDING', parent__isnull=True
+    ).order_by('position', 'id'))
+    for idx, stop in enumerate(stops, start=1):
+        if stop.position != idx:
+            stop.position = idx
+            stop.save(update_fields=['position'])
+
+
+class DeliveryStopViewSet(viewsets.ModelViewSet):
+    serializer_class = DeliveryStopSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        if self.action != 'list':
+            return DeliveryStop.objects.all().select_related('member', 'delivered_by').prefetch_related(
+                Prefetch('children', queryset=DeliveryStop.objects.select_related('member').order_by('id'))
+            )
+
+        year = self.request.query_params.get('year')
+        month = self.request.query_params.get('month')
+        if not year or not month:
+            now = timezone.now()
+            year = year or now.year
+            month = month or now.month
+        try:
+            year = int(year)
+            month = int(month)
+        except (TypeError, ValueError):
+            now = timezone.now()
+            year = now.year
+            month = now.month
+
+        qs = DeliveryStop.objects.filter(year=year, month=month)
+
+        flat = self.request.query_params.get('flat')
+        if not (flat == '1' or str(flat).lower() == 'true'):
+            orphans = qs.filter(parent__isnull=True, status='PENDING', position__lte=0)
+            if orphans.exists():
+                with transaction.atomic():
+                    max_pos = qs.filter(parent__isnull=True, status='PENDING').aggregate(m=Max('position'))['m'] or 0
+                    for orphan in orphans:
+                        max_pos += 1
+                        orphan.position = max_pos
+                        orphan.save(update_fields=['position'])
+            qs = qs.filter(parent__isnull=True)
+
+        status_param = self.request.query_params.get('status')
+        if status_param in ('PENDING', 'DELIVERED'):
+            qs = qs.filter(status=status_param)
+
+        street = self.request.query_params.get('street')
+        if street:
+            qs = qs.filter(Q(member__street_number=street) | Q(children__member__street_number=street)).distinct()
+
+        member_type = self.request.query_params.get('member_type')
+        if member_type in ('RESIDENTIAL', 'COMMERCIAL'):
+            qs = qs.filter(Q(member__member_type=member_type) | Q(children__member__member_type=member_type)).distinct()
+
+        search = self.request.query_params.get('search')
+        if search:
+            search = search.strip()
+            search_q = (
+                Q(member__full_name__icontains=search) |
+                Q(member__mobile_number__icontains=search) |
+                Q(member__guard_name__icontains=search) |
+                Q(member__guard_mobile__icontains=search) |
+                Q(member__guard_mobile_2__icontains=search) |
+                Q(children__member__full_name__icontains=search) |
+                Q(children__member__mobile_number__icontains=search) |
+                Q(children__member__guard_name__icontains=search) |
+                Q(children__member__guard_mobile__icontains=search) |
+                Q(children__member__guard_mobile_2__icontains=search)
+            )
+            if search.isdigit():
+                search_q |= Q(member__id=int(search)) | Q(children__member__id=int(search))
+            qs = qs.filter(search_q).distinct()
+
+        return qs.select_related('member', 'delivered_by').prefetch_related(
+            Prefetch('children', queryset=DeliveryStop.objects.select_related('member').order_by('id'))
+        ).order_by('position', 'id')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        year = self.request.query_params.get('year', timezone.now().year)
+        month = self.request.query_params.get('month', timezone.now().month)
+        try:
+            year = int(year)
+            month = int(month)
+        except (TypeError, ValueError):
+            year = timezone.now().year
+            month = timezone.now().month
+
+        receipts = Receipt.objects.filter(
+            practice__year=year,
+            practice__month=month,
+            practice__is_deleted=False
+        ).select_related('practice')
+        receipts_by_member_id = {r.member_id: r for r in receipts}
+        context['receipts_by_member_id'] = receipts_by_member_id
+        return context
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            member = serializer.validated_data['member']
+            year = serializer.validated_data['year']
+            month = serializer.validated_data['month']
+            desired_pos = self.request.data.get('position')
+
+            if desired_pos is not None:
+                try:
+                    desired_pos = int(desired_pos)
+                except (TypeError, ValueError):
+                    desired_pos = None
+
+            if desired_pos is not None and desired_pos > 0:
+                DeliveryStop.objects.filter(
+                    year=year, month=month, status='PENDING', parent__isnull=True, position__gte=desired_pos
+                ).update(position=F('position') + 1)
+                instance = serializer.save(position=desired_pos)
+            else:
+                max_pos = DeliveryStop.objects.filter(
+                    year=year, month=month, status='PENDING', parent__isnull=True
+                ).aggregate(m=Max('position'))['m'] or 0
+                instance = serializer.save(position=max_pos + 1)
+
+            renumber_pending_stops(year, month)
+            return instance
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        year, month = instance.year, instance.month
+        with transaction.atomic():
+            instance.delete()
+            renumber_pending_stops(year, month)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'])
+    def bulk_add(self, request):
+        year = request.data.get('year', timezone.now().year)
+        month = request.data.get('month', timezone.now().month)
+        source = request.data.get('source', 'receipts')
+        street = request.data.get('street')
+        member_type = request.data.get('member_type')
+
+        try:
+            year = int(year)
+            month = int(month)
+        except (TypeError, ValueError):
+            return Response({'error': 'السنة أو الشهر غير صحيح'}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing_member_ids = set(
+            DeliveryStop.objects.filter(year=year, month=month).values_list('member_id', flat=True)
+        )
+
+        if source == 'receipts':
+            member_qs = Member.objects.filter(
+                is_active=True,
+                is_deleted=False,
+                receipts__practice__year=year,
+                receipts__practice__month=month,
+                receipts__practice__is_deleted=False
+            ).exclude(receipts__status='DELIVERED')
+        elif source == 'all':
+            member_qs = Member.objects.filter(is_active=True, is_deleted=False)
+        else:
+            return Response({'error': 'مصدر التعبئة غير صالح'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if street:
+            member_qs = member_qs.filter(street_number=street)
+        if member_type in ('RESIDENTIAL', 'COMMERCIAL'):
+            member_qs = member_qs.filter(member_type=member_type)
+
+        member_qs = member_qs.exclude(id__in=existing_member_ids).distinct().order_by('street_number', 'full_name')
+        members = list(member_qs)
+
+        if not members:
+            return Response({'added_count': 0, 'message': 'لم يتم العثور على أعضاء جدد لإضافتهم'}, status=status.HTTP_200_OK)
+
+        with transaction.atomic():
+            max_pos = DeliveryStop.objects.filter(
+                year=year, month=month, status='PENDING', parent__isnull=True
+            ).aggregate(m=Max('position'))['m'] or 0
+
+            new_stops = []
+            for m in members:
+                max_pos += 1
+                new_stops.append(DeliveryStop(
+                    member=m,
+                    year=year,
+                    month=month,
+                    position=max_pos,
+                    status='PENDING'
+                ))
+            DeliveryStop.objects.bulk_create(new_stops)
+            renumber_pending_stops(year, month)
+
+        return Response({
+            'added_count': len(new_stops),
+            'message': f'تمت إضافة {len(new_stops)} عضو إلى خط السير بنجاح'
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        ids = request.data.get('ids', [])
+        if not isinstance(ids, list):
+            ids = request.data.getlist('ids')
+        ids = [int(x) for x in ids if str(x).isdigit()]
+        if not ids:
+            return Response({'error': 'قائمة المعرفات مطلوبة'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            sample = DeliveryStop.objects.filter(id__in=ids).first()
+            for idx, stop_id in enumerate(ids, start=1):
+                DeliveryStop.objects.filter(id=stop_id).update(position=idx)
+            if sample:
+                remaining = DeliveryStop.objects.filter(
+                    year=sample.year, month=sample.month, status='PENDING', parent__isnull=True
+                ).exclude(id__in=ids).order_by('position', 'id')
+                curr = len(ids) + 1
+                for r in remaining:
+                    r.position = curr
+                    r.save(update_fields=['position'])
+                    curr += 1
+
+        return Response({'success': True, 'message': 'تم تحديث الترتيب بنجاح'})
+
+    @action(detail=True, methods=['post'])
+    def move(self, request, pk=None):
+        stop = self.get_object()
+        if stop.status != 'PENDING' or stop.parent_id is not None:
+            return Response({'error': 'لا يمكن تحريك هذا العنصر'}, status=status.HTTP_400_BAD_REQUEST)
+
+        to_direction = request.data.get('to')
+        target_pos = request.data.get('position')
+
+        with transaction.atomic():
+            pending_stops = list(DeliveryStop.objects.filter(
+                year=stop.year, month=stop.month, status='PENDING', parent__isnull=True
+            ).order_by('position', 'id'))
+
+            if stop not in pending_stops:
+                return Response({'error': 'العنصر غير موجود في القائمة النشطة'}, status=status.HTTP_400_BAD_REQUEST)
+
+            idx = pending_stops.index(stop)
+            pending_stops.pop(idx)
+
+            if to_direction == 'top':
+                pending_stops.insert(0, stop)
+            elif to_direction == 'bottom':
+                pending_stops.append(stop)
+            elif to_direction == 'up':
+                new_idx = max(0, idx - 1)
+                pending_stops.insert(new_idx, stop)
+            elif to_direction == 'down':
+                new_idx = min(len(pending_stops), idx + 1)
+                pending_stops.insert(new_idx, stop)
+            elif target_pos is not None:
+                try:
+                    target_pos = int(target_pos)
+                    new_idx = max(0, min(len(pending_stops), target_pos - 1))
+                    pending_stops.insert(new_idx, stop)
+                except ValueError:
+                    return Response({'error': 'الموضع غير صالح'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({'error': 'اتجاه أو موضع التحريك مطلوب'}, status=status.HTTP_400_BAD_REQUEST)
+
+            for i, s in enumerate(pending_stops, start=1):
+                if s.position != i:
+                    s.position = i
+                    s.save(update_fields=['position'])
+
+        serializer = self.get_serializer(stop)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def deliver(self, request, pk=None):
+        stop = self.get_object()
+        if stop.parent_id is not None:
+            return Response({'error': 'التسليم المباشر لعضو مدموج مرفوض؛ يجب تسليم المجموعة من العضو الرئيسي.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sync_receipt = request.data.get('sync_receipt', True)
+        if isinstance(sync_receipt, str):
+            sync_receipt = sync_receipt.lower() in ('true', '1')
+
+        now = timezone.now()
+        with transaction.atomic():
+            stop.status = 'DELIVERED'
+            stop.delivered_at = now
+            stop.delivered_by = request.user if request.user.is_authenticated else None
+
+            if sync_receipt:
+                primary_receipt = Receipt.objects.filter(
+                    member=stop.member,
+                    practice__year=stop.year,
+                    practice__month=stop.month,
+                    practice__is_deleted=False
+                ).first()
+                if primary_receipt and primary_receipt.status == 'RECEIVED':
+                    primary_receipt.status = 'DELIVERED'
+                    primary_receipt.delivery_date = now.date()
+                    primary_receipt.save()
+                    stop.receipt_synced = True
+                    AuditLog.objects.create(
+                        user=request.user if request.user.is_authenticated else None,
+                        action='RECEIPT_DELIVERED_VIA_ROUTE',
+                        entity_name='Receipt',
+                        entity_id=primary_receipt.id,
+                        old_values={'status': 'RECEIVED'},
+                        new_values={'status': 'DELIVERED', 'delivery_date': str(primary_receipt.delivery_date)}
+                    )
+                else:
+                    stop.receipt_synced = False
+            else:
+                stop.receipt_synced = False
+
+            stop.save()
+
+            for child in stop.children.all():
+                child.status = 'DELIVERED'
+                child.delivered_at = now
+                child.delivered_by = stop.delivered_by
+                if sync_receipt:
+                    child_receipt = Receipt.objects.filter(
+                        member=child.member,
+                        practice__year=child.year,
+                        practice__month=child.month,
+                        practice__is_deleted=False
+                    ).first()
+                    if child_receipt and child_receipt.status == 'RECEIVED':
+                        child_receipt.status = 'DELIVERED'
+                        child_receipt.delivery_date = now.date()
+                        child_receipt.save()
+                        child.receipt_synced = True
+                        AuditLog.objects.create(
+                            user=request.user if request.user.is_authenticated else None,
+                            action='RECEIPT_DELIVERED_VIA_ROUTE',
+                            entity_name='Receipt',
+                            entity_id=child_receipt.id,
+                            old_values={'status': 'RECEIVED'},
+                            new_values={'status': 'DELIVERED', 'delivery_date': str(child_receipt.delivery_date)}
+                        )
+                    else:
+                        child.receipt_synced = False
+                else:
+                    child.receipt_synced = False
+                child.save()
+
+            renumber_pending_stops(stop.year, stop.month)
+
+        serializer = self.get_serializer(stop)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def undo_delivery(self, request, pk=None):
+        stop = self.get_object()
+        if stop.parent_id is not None:
+            return Response({'error': 'التراجع المباشر لعضو مدموج مرفوض؛ يجب التراجع من العضو الرئيسي.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            stop.status = 'PENDING'
+            stop.delivered_at = None
+            stop.delivered_by = None
+
+            if stop.receipt_synced:
+                primary_receipt = Receipt.objects.filter(
+                    member=stop.member,
+                    practice__year=stop.year,
+                    practice__month=stop.month,
+                    practice__is_deleted=False
+                ).first()
+                if primary_receipt and primary_receipt.status == 'DELIVERED':
+                    primary_receipt.status = 'RECEIVED'
+                    primary_receipt.delivery_date = None
+                    primary_receipt.save()
+                    AuditLog.objects.create(
+                        user=request.user if request.user.is_authenticated else None,
+                        action='RECEIPT_UNDELIVERED_VIA_ROUTE',
+                        entity_name='Receipt',
+                        entity_id=primary_receipt.id,
+                        old_values={'status': 'DELIVERED'},
+                        new_values={'status': 'RECEIVED', 'delivery_date': None}
+                    )
+                stop.receipt_synced = False
+
+            for child in stop.children.all():
+                child.status = 'PENDING'
+                child.delivered_at = None
+                child.delivered_by = None
+                if child.receipt_synced:
+                    child_receipt = Receipt.objects.filter(
+                        member=child.member,
+                        practice__year=child.year,
+                        practice__month=child.month,
+                        practice__is_deleted=False
+                    ).first()
+                    if child_receipt and child_receipt.status == 'DELIVERED':
+                        child_receipt.status = 'RECEIVED'
+                        child_receipt.delivery_date = None
+                        child_receipt.save()
+                        AuditLog.objects.create(
+                            user=request.user if request.user.is_authenticated else None,
+                            action='RECEIPT_UNDELIVERED_VIA_ROUTE',
+                            entity_name='Receipt',
+                            entity_id=child_receipt.id,
+                            old_values={'status': 'DELIVERED'},
+                            new_values={'status': 'RECEIVED', 'delivery_date': None}
+                        )
+                    child.receipt_synced = False
+                child.save()
+
+            max_pos = DeliveryStop.objects.filter(
+                year=stop.year, month=stop.month, status='PENDING', parent__isnull=True
+            ).aggregate(m=Max('position'))['m'] or 0
+            stop.position = max_pos + 1
+            stop.save()
+            renumber_pending_stops(stop.year, stop.month)
+
+        serializer = self.get_serializer(stop)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def merge(self, request, pk=None):
+        stop = self.get_object()
+        if stop.parent_id is not None:
+            return Response({'error': 'لا يمكن الدمج في عضو تابع، يجب الدمج في العضو الرئيسي'}, status=status.HTTP_400_BAD_REQUEST)
+
+        member_ids = request.data.get('member_ids', [])
+        stop_ids = request.data.get('stop_ids', [])
+
+        target_stops = DeliveryStop.objects.filter(
+            year=stop.year, month=stop.month
+        ).filter(
+            Q(id__in=stop_ids) | Q(member_id__in=member_ids)
+        ).exclude(id=stop.id)
+
+        if not target_stops.exists():
+            return Response({'error': 'لم يتم العثور على أعضاء للدمج'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            for target in target_stops:
+                target.children.update(parent=stop, position=0)
+                target.parent = stop
+                target.position = 0
+                target.save()
+
+            renumber_pending_stops(stop.year, stop.month)
+
+        serializer = self.get_serializer(stop)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def unmerge(self, request, pk=None):
+        stop = self.get_object()
+        child_id = request.data.get('child_id')
+
+        with transaction.atomic():
+            if stop.parent_id is not None:
+                child = stop
+                primary = child.parent
+            else:
+                primary = stop
+                if not child_id:
+                    return Response({'error': 'معرف العضو المطلوب فصله مطلوب'}, status=status.HTTP_400_BAD_REQUEST)
+                child = primary.children.filter(id=child_id).first()
+                if not child:
+                    return Response({'error': 'العضو غير موجود ضمن المجموعة'}, status=status.HTTP_404_NOT_FOUND)
+
+            child.parent = None
+            child.position = (primary.position if primary else 1) + 1
+            DeliveryStop.objects.filter(
+                year=child.year, month=child.month, status='PENDING', parent__isnull=True, position__gte=child.position
+            ).exclude(id=child.id).update(position=F('position') + 1)
+            child.save()
+
+            renumber_pending_stops(child.year, child.month)
+
+        serializer = self.get_serializer(child)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def make_primary(self, request, pk=None):
+        stop = self.get_object()
+        new_primary_id = request.data.get('new_primary_id')
+
+        with transaction.atomic():
+            if stop.parent_id is not None:
+                new_primary = stop
+                old_primary = stop.parent
+            else:
+                old_primary = stop
+                if not new_primary_id:
+                    return Response({'error': 'معرف العضو الرئيسي الجديد مطلوب'}, status=status.HTTP_400_BAD_REQUEST)
+                new_primary = old_primary.children.filter(id=new_primary_id).first()
+                if not new_primary:
+                    return Response({'error': 'العضو المحدد غير موجود في المجموعة'}, status=status.HTTP_404_NOT_FOUND)
+
+            orig_pos = old_primary.position
+            new_primary.parent = None
+            new_primary.position = orig_pos
+            new_primary.save()
+
+            old_primary.parent = new_primary
+            old_primary.position = 0
+            old_primary.save()
+
+            DeliveryStop.objects.filter(parent=old_primary).exclude(id=new_primary.id).update(parent=new_primary)
+
+        serializer = self.get_serializer(new_primary)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def auto_merge_guard(self, request):
+        year = request.data.get('year', timezone.now().year)
+        month = request.data.get('month', timezone.now().month)
+        dry_run = request.data.get('dry_run', True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() in ('true', '1')
+
+        try:
+            year = int(year)
+            month = int(month)
+        except (TypeError, ValueError):
+            return Response({'error': 'السنة أو الشهر غير صحيح'}, status=status.HTTP_400_BAD_REQUEST)
+
+        stops = DeliveryStop.objects.filter(
+            year=year, month=month, status='PENDING'
+        ).select_related('member')
+
+        guard_groups = {}
+        for s in stops:
+            raw_phone = s.member.guard_mobile or ''
+            cleaned = re.sub(r'\D', '', raw_phone)
+            if len(cleaned) >= 8:
+                guard_groups.setdefault(cleaned, []).append(s)
+
+        mergeable_groups = {k: v for k, v in guard_groups.items() if len(v) > 1}
+
+        preview = []
+        for phone, group in mergeable_groups.items():
+            sorted_group = sorted(group, key=lambda x: (x.position if x.position > 0 else 999999, x.id))
+            primary = sorted_group[0]
+            others = sorted_group[1:]
+            preview.append({
+                'guard_mobile': phone,
+                'guard_name': primary.member.guard_name or others[0].member.guard_name,
+                'primary': {
+                    'id': primary.id,
+                    'member_name': primary.member.full_name,
+                    'street_number': primary.member.street_number,
+                    'position': primary.position
+                },
+                'members': [
+                    {
+                        'id': o.id,
+                        'member_name': o.member.full_name,
+                        'street_number': o.member.street_number
+                    }
+                    for o in others
+                ]
+            })
+
+        if dry_run:
+            return Response({
+                'dry_run': True,
+                'groups_count': len(preview),
+                'members_count': sum(len(g['members']) + 1 for g in preview),
+                'groups': preview
+            })
+
+        with transaction.atomic():
+            for phone, group in mergeable_groups.items():
+                sorted_group = sorted(group, key=lambda x: (x.position if x.position > 0 else 999999, x.id))
+                primary = sorted_group[0]
+                others = sorted_group[1:]
+                for o in others:
+                    o.children.update(parent=primary, position=0)
+                    o.parent = primary
+                    o.position = 0
+                    o.save()
+            renumber_pending_stops(year, month)
+
+        return Response({
+            'dry_run': False,
+            'merged_groups_count': len(preview),
+            'merged_members_count': sum(len(g['members']) + 1 for g in preview),
+            'message': f'تم دمج {len(preview)} مجموعة بنجاح'
+        })
+

@@ -9,6 +9,7 @@ import { FinancialsView } from './components/FinancialsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { LiveMapView } from './components/LiveMapView';
+import { DeliveryView } from './components/DeliveryView';
 import { LoginView } from './components/LoginView';
 import { AddMemberModal, EditMemberModal, AddPracticeModal, EditPracticeModal, RecordPaymentModal, AddExpenseModal } from './components/modals';
 import { MemberDetailModal } from './components/MemberDetailModal';
@@ -155,6 +156,15 @@ export const App: React.FC = () => {
               setAddMemberType('RESIDENTIAL');
               setIsAddMemberOpen(true);
             }}
+            onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
+          />
+        )}
+
+        {activeTab === 'delivery' && (
+          <DeliveryView
+            key={`delivery-${refreshKey}-${year}-${month}`}
+            year={year}
+            month={month}
             onSelectMember={(mId) => setSelectedMemberDetailId(mId)}
           />
         )}
