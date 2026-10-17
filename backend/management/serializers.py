@@ -2,8 +2,9 @@ from decimal import Decimal
 from rest_framework import serializers
 from .models import (
     Member, PracticeType, Practice, Payment, Receipt,
-    Expense, FinancialTransaction, AuditLog, DeliveryStop
+    Expense, FinancialTransaction, AuditLog, DeliveryStop, RouteTemplate
 )
+
 
 class PracticeTypeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -149,7 +150,8 @@ class DeliveryMergedMemberSerializer(serializers.ModelSerializer):
             'street_number', 'mobile_number', 'has_guard', 'guard_name',
             'guard_mobile', 'guard_mobile_2', 'latitude', 'longitude',
             'status', 'receipt_id', 'receipt_number', 'receipt_amount',
-            'receipt_status', 'notes', 'created_at', 'updated_at'
+            'receipt_status', 'custom_amount', 'custom_receipt_number',
+            'notes', 'created_at', 'updated_at'
         ]
 
     def _get_receipt(self, obj):
@@ -169,11 +171,17 @@ class DeliveryMergedMemberSerializer(serializers.ModelSerializer):
 
     def get_receipt_number(self, obj):
         r = self._get_receipt(obj)
-        return r.receipt_number if r else ''
+        if r and r.receipt_number:
+            return r.receipt_number
+        return obj.custom_receipt_number or ''
 
     def get_receipt_amount(self, obj):
         r = self._get_receipt(obj)
-        return str(r.receipt_amount) if r else '0.00'
+        if r and r.receipt_amount:
+            return str(r.receipt_amount)
+        if obj.custom_amount is not None:
+            return str(obj.custom_amount)
+        return '0.00'
 
     def get_receipt_status(self, obj):
         r = self._get_receipt(obj)
@@ -208,6 +216,7 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'member', 'parent', 'year', 'month', 'position', 'status',
             'delivered_at', 'delivered_by', 'delivered_by_name', 'receipt_synced',
+            'custom_amount', 'custom_receipt_number',
             'notes', 'created_at', 'updated_at',
             'member_name', 'member_type', 'member_type_display',
             'street_number', 'mobile_number', 'has_guard', 'guard_name',
@@ -241,47 +250,64 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
 
     def get_receipt_number(self, obj):
         r = self._get_receipt(obj)
-        return r.receipt_number if r else ''
+        if r and r.receipt_number:
+            return r.receipt_number
+        return obj.custom_receipt_number or ''
 
     def get_receipt_amount(self, obj):
         r = self._get_receipt(obj)
-        return str(r.receipt_amount) if r else '0.00'
+        if r and r.receipt_amount:
+            return str(r.receipt_amount)
+        if obj.custom_amount is not None:
+            return str(obj.custom_amount)
+        return '0.00'
 
     def get_receipt_status(self, obj):
         r = self._get_receipt(obj)
         return r.status if r else None
 
     def get_merged(self, obj):
-        children = getattr(obj, '_prefetched_children', None)
-        if children is None:
-            children = list(obj.children.all())
+        children = list(obj.children.all())
         serializer = DeliveryMergedMemberSerializer(children, many=True, context=self.context)
         return serializer.data
 
     def get_group_members_count(self, obj):
-        children = getattr(obj, '_prefetched_children', None)
-        if children is None:
-            return 1 + obj.children.count()
-        return 1 + len(children)
+        # Optimized: Zero extra queries by using prefetched children cache in memory
+        return 1 + len(obj.children.all())
 
     def get_group_total_amount(self, obj):
         primary_r = self._get_receipt(obj)
-        total = Decimal(str(primary_r.receipt_amount)) if primary_r and primary_r.receipt_amount else Decimal('0.00')
-        children = getattr(obj, '_prefetched_children', None)
-        if children is None:
-            children = list(obj.children.all())
+        if primary_r and primary_r.receipt_amount:
+            total = Decimal(str(primary_r.receipt_amount))
+        elif obj.custom_amount is not None:
+            total = Decimal(str(obj.custom_amount))
+        else:
+            total = Decimal('0.00')
+
+        children = list(obj.children.all())
         receipts_map = self.context.get('receipts_by_member_id')
         for child in children:
             if receipts_map is not None:
                 cr = receipts_map.get(child.member_id)
             else:
-                cr = Receipt.objects.filter(
-                    member_id=child.member_id,
-                    practice__year=child.year,
-                    practice__month=child.month,
-                    practice__is_deleted=False
-                ).first()
+                cr = self._get_receipt(child)
+
             if cr and cr.receipt_amount:
                 total += Decimal(str(cr.receipt_amount))
+            elif child.custom_amount is not None:
+                total += Decimal(str(child.custom_amount))
+
         return str(total)
+
+
+class RouteTemplateSerializer(serializers.ModelSerializer):
+    stops_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RouteTemplate
+        fields = ['id', 'name', 'description', 'stops_data', 'stops_count', 'created_at', 'updated_at']
+
+    def get_stops_count(self, obj):
+        return len(obj.stops_data) if isinstance(obj.stops_data, list) else 0
+
 

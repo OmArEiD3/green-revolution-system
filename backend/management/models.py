@@ -328,6 +328,14 @@ class DeliveryStop(models.Model):
         verbose_name="تم التسليم بواسطة"
     )
     receipt_synced = models.BooleanField(default=False, verbose_name="تم مزامنة حالة الإيصال")
+    custom_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name="مبلغ الإيصال اليدوي"
+    )
+    custom_receipt_number = models.CharField(
+        max_length=100, blank=True,
+        verbose_name="رقم الإيصال اليدوي"
+    )
     notes = models.TextField(blank=True, verbose_name="ملاحظات")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التعديل")
@@ -349,4 +357,21 @@ class DeliveryStop(models.Model):
             first_child.save()
             self.children.exclude(id=first_child.id).update(parent=first_child)
         super().delete(*args, **kwargs)
+
+
+class RouteTemplate(models.Model):
+    name = models.CharField(max_length=255, verbose_name="اسم خط السير / القالب", db_index=True)
+    description = models.TextField(blank=True, verbose_name="الوصف")
+    stops_data = models.JSONField(default=list, verbose_name="ترتيب وبيانات المحطات")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الحفظ")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التحديث")
+
+    class Meta:
+        verbose_name = "قالب خط سير محفوظ"
+        verbose_name_plural = "قوالب خطوط السير المحفوظة"
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.name} ({len(self.stops_data)} محطة)"
+
 

@@ -2,7 +2,7 @@ import axios from 'axios';
 import {
   Member, Receipt, Practice, PracticeType, DashboardData,
   StreetData, MemberStatement, CommercialReportResponse, BackupInspectResult,
-  DeliveryStop, DeliveryAutoMergeResponse
+  DeliveryStop, DeliveryAutoMergeResponse, RouteTemplate
 } from '../types';
 
 const api = axios.create({
@@ -327,9 +327,15 @@ export const deliveryApi = {
     year: number;
     month: number;
     position?: number;
+    custom_amount?: number | string;
+    custom_receipt_number?: string;
     notes?: string;
   }): Promise<DeliveryStop> => {
     const res = await api.post('/delivery-stops/', data);
+    return res.data;
+  },
+  update: async (id: number, data: Partial<DeliveryStop>): Promise<DeliveryStop> => {
+    const res = await api.patch(`/delivery-stops/${id}/`, data);
     return res.data;
   },
   bulkAdd: async (data: {
@@ -376,6 +382,33 @@ export const deliveryApi = {
     dry_run?: boolean;
   }): Promise<DeliveryAutoMergeResponse> => {
     const res = await api.post('/delivery-stops/auto_merge_guard/', data);
+    return res.data;
+  },
+  templates: async (): Promise<RouteTemplate[]> => {
+    const res = await api.get('/delivery-stops/templates/');
+    return res.data;
+  },
+  saveTemplate: async (data: {
+    year: number;
+    month: number;
+    name?: string;
+    description?: string;
+  }): Promise<RouteTemplate> => {
+    const res = await api.post('/delivery-stops/save_template/', data);
+    return res.data;
+  },
+  applyTemplate: async (data: {
+    year: number;
+    month: number;
+    template_id?: number;
+    source_year?: number;
+    source_month?: number;
+  }): Promise<{ success: boolean; message: string; stops_count: number }> => {
+    const res = await api.post('/delivery-stops/apply_template/', data);
+    return res.data;
+  },
+  deleteTemplate: async (templateId: number): Promise<{ success: boolean; message: string }> => {
+    const res = await api.delete(`/delivery-stops/templates/${templateId}/`);
     return res.data;
   },
   delete: async (id: number): Promise<void> => {

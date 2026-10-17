@@ -257,6 +257,8 @@ export interface DeliveryMergedMember {
   status: 'PENDING' | 'DELIVERED';
   receipt_id: number | null;
   receipt_number: string;
+  custom_amount?: string | number | null;
+  custom_receipt_number?: string;
   receipt_amount: string;
   receipt_status: 'NOT_RECEIVED' | 'RECEIVED' | 'DELIVERED' | null;
   notes: string;
@@ -276,6 +278,8 @@ export interface DeliveryStop {
   delivered_by: number | null;
   delivered_by_name: string | null;
   receipt_synced: boolean;
+  custom_amount?: string | number | null;
+  custom_receipt_number?: string;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -327,5 +331,16 @@ export interface DeliveryAutoMergeResponse {
   groups?: DeliveryAutoMergeGroup[];
   message?: string;
 }
+
+export interface RouteTemplate {
+  id: number;
+  name: string;
+  description: string;
+  stops_data: any[];
+  stops_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 
 

@@ -640,3 +640,54 @@ class DeliveryRouteFeatureTests(TestCase):
         res = anon_client.get('/api/delivery-stops/')
         self.assertIn(res.status_code, [401, 403])
 
+    def test_route_template_save_and_apply(self):
+        """22. Route templates can be saved from active route and applied to target month"""
+        s1 = DeliveryStop.objects.create(member=self.member1, year=2026, month=10, position=1)
+        s2 = DeliveryStop.objects.create(member=self.member2, year=2026, month=10, position=0, parent=s1)
+
+        # Save template
+        save_res = self.client.post('/api/delivery-stops/save_template/', {
+            'year': 2026,
+            'month': 10,
+            'name': 'خط سير المعدات التجريبي'
+        })
+        self.assertEqual(save_res.status_code, 201)
+        tpl_id = save_res.data['id']
+
+        # List templates
+        list_res = self.client.get('/api/delivery-stops/templates/')
+        self.assertEqual(list_res.status_code, 200)
+        self.assertTrue(any(t['id'] == tpl_id for t in list_res.data))
+
+        # Apply to month 11
+        apply_res = self.client.post('/api/delivery-stops/apply_template/', {
+            'year': 2026,
+            'month': 11,
+            'template_id': tpl_id
+        })
+        self.assertEqual(apply_res.status_code, 200)
+
+        s1_nov = DeliveryStop.objects.get(member=self.member1, year=2026, month=11)
+        s2_nov = DeliveryStop.objects.get(member=self.member2, year=2026, month=11)
+        self.assertEqual(s1_nov.position, 1)
+        self.assertEqual(s2_nov.parent_id, s1_nov.id)
+
+    def test_bidirectional_receipt_delivery_sync(self):
+        """23. Delivering a receipt directly in ReceiptsView marks DeliveryStop DELIVERED"""
+        p1 = Practice.objects.create(member=self.member1, practice_type=self.pt_main, year=2026, month=10, required_amount=Decimal('350.00'))
+        r1 = FinancialService.ensure_practice_receipt(p1)
+        r1.status = 'RECEIVED'
+        r1.save()
+
+        stop = DeliveryStop.objects.create(member=self.member1, year=2026, month=10, position=1)
+
+        # Mark delivered via receipt endpoint
+        res = self.client.post(f'/api/receipts/{r1.id}/mark_delivered/')
+        self.assertEqual(res.status_code, 200)
+
+        stop.refresh_from_db()
+        self.assertEqual(stop.status, 'DELIVERED')
+        self.assertTrue(stop.receipt_synced)
+
+
+

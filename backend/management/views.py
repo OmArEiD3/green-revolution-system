@@ -21,13 +21,14 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from .models import (
     Member, PracticeType, Practice, Payment, Receipt,
-    Expense, FinancialTransaction, AuditLog, DeliveryStop
+    Expense, FinancialTransaction, AuditLog, DeliveryStop, RouteTemplate
 )
 from .serializers import (
     MemberSerializer, PracticeTypeSerializer, PracticeSerializer,
     PaymentSerializer, ReceiptSerializer, ExpenseSerializer,
     FinancialTransactionSerializer, AuditLogSerializer,
-    DeliveryStopSerializer, DeliveryMergedMemberSerializer
+    DeliveryStopSerializer, DeliveryMergedMemberSerializer,
+    RouteTemplateSerializer
 )
 from .services import FinancialService
 
@@ -588,6 +589,22 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         receipt.delivery_date = timezone.now().date()
         receipt.save()
 
+        # Bidirectional sync: If a delivery stop exists for this member/month, mark it DELIVERED
+        matching_stops = DeliveryStop.objects.filter(
+            member=receipt.member,
+            year=receipt.practice.year,
+            month=receipt.practice.month,
+            status='PENDING'
+        )
+        if matching_stops.exists():
+            matching_stops.update(
+                status='DELIVERED',
+                delivered_at=timezone.now(),
+                delivered_by=request.user if request.user.is_authenticated else None,
+                receipt_synced=True
+            )
+            renumber_pending_stops(receipt.practice.year, receipt.practice.month)
+
         AuditLog.objects.create(
             user=request.user if request.user.is_authenticated else None,
             action='RECEIPT_MARKED_DELIVERED',
@@ -595,7 +612,7 @@ class ReceiptViewSet(viewsets.ModelViewSet):
             entity_id=receipt.id,
             new_values={'status': 'DELIVERED', 'delivery_date': str(receipt.delivery_date)}
         )
-        return Response({'success': True, 'message': 'تم تسجيل تسليم الإيصال للعضو'})
+        return Response({'success': True, 'message': 'تم تسجيل تسليم الإيصال للعضو ومزامنة خط السير'})
 
     @action(detail=True, methods=['post'])
     def mark_received(self, request, pk=None):
@@ -1456,8 +1473,9 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
                 is_deleted=False,
                 receipts__practice__year=year,
                 receipts__practice__month=month,
-                receipts__practice__is_deleted=False
-            ).exclude(receipts__status='DELIVERED')
+                receipts__practice__is_deleted=False,
+                receipts__status__in=['NOT_RECEIVED', 'RECEIVED']
+            )
         elif source == 'all':
             member_qs = Member.objects.filter(is_active=True, is_deleted=False)
         else:
@@ -1593,9 +1611,12 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
                     practice__month=stop.month,
                     practice__is_deleted=False
                 ).first()
-                if primary_receipt and primary_receipt.status == 'RECEIVED':
+                if primary_receipt:
+                    old_st = primary_receipt.status
                     primary_receipt.status = 'DELIVERED'
                     primary_receipt.delivery_date = now.date()
+                    if not primary_receipt.received_date:
+                        primary_receipt.received_date = now.date()
                     primary_receipt.save()
                     stop.receipt_synced = True
                     AuditLog.objects.create(
@@ -1603,7 +1624,7 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
                         action='RECEIPT_DELIVERED_VIA_ROUTE',
                         entity_name='Receipt',
                         entity_id=primary_receipt.id,
-                        old_values={'status': 'RECEIVED'},
+                        old_values={'status': old_st},
                         new_values={'status': 'DELIVERED', 'delivery_date': str(primary_receipt.delivery_date)}
                     )
                 else:
@@ -1624,9 +1645,12 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
                         practice__month=child.month,
                         practice__is_deleted=False
                     ).first()
-                    if child_receipt and child_receipt.status == 'RECEIVED':
+                    if child_receipt:
+                        old_st = child_receipt.status
                         child_receipt.status = 'DELIVERED'
                         child_receipt.delivery_date = now.date()
+                        if not child_receipt.received_date:
+                            child_receipt.received_date = now.date()
                         child_receipt.save()
                         child.receipt_synced = True
                         AuditLog.objects.create(
@@ -1634,7 +1658,7 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
                             action='RECEIPT_DELIVERED_VIA_ROUTE',
                             entity_name='Receipt',
                             entity_id=child_receipt.id,
-                            old_values={'status': 'RECEIVED'},
+                            old_values={'status': old_st},
                             new_values={'status': 'DELIVERED', 'delivery_date': str(child_receipt.delivery_date)}
                         )
                     else:
@@ -1826,12 +1850,26 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
 
         guard_groups = {}
         for s in stops:
-            raw_phone = s.member.guard_mobile or ''
-            cleaned = re.sub(r'\D', '', raw_phone)
-            if len(cleaned) >= 8:
-                guard_groups.setdefault(cleaned, []).append(s)
+            phones = []
+            if s.member.guard_mobile:
+                c1 = re.sub(r'\D', '', s.member.guard_mobile)
+                if len(c1) >= 8:
+                    phones.append(c1)
+            if s.member.guard_mobile_2:
+                c2 = re.sub(r'\D', '', s.member.guard_mobile_2)
+                if len(c2) >= 8:
+                    phones.append(c2)
 
-        mergeable_groups = {k: v for k, v in guard_groups.items() if len(v) > 1}
+            for p in phones:
+                guard_groups.setdefault(p, []).append(s)
+                break  # match on first valid guard phone
+
+        mergeable_groups = {}
+        for k, v in guard_groups.items():
+            # Deduplicate by stop id
+            unique_stops = {s.id: s for s in v}.values()
+            if len(unique_stops) > 1:
+                mergeable_groups[k] = list(unique_stops)
 
         preview = []
         for phone, group in mergeable_groups.items():
@@ -1840,7 +1878,7 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             others = sorted_group[1:]
             preview.append({
                 'guard_mobile': phone,
-                'guard_name': primary.member.guard_name or others[0].member.guard_name,
+                'guard_name': primary.member.guard_name or (others[0].member.guard_name if others else 'مسجل'),
                 'primary': {
                     'id': primary.id,
                     'member_name': primary.member.full_name,
@@ -1869,6 +1907,11 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             for phone, group in mergeable_groups.items():
                 sorted_group = sorted(group, key=lambda x: (x.position if x.position > 0 else 999999, x.id))
                 primary = sorted_group[0]
+                # Ensure primary is not a child of anyone else so no 3-level tree or ghost records form
+                if primary.parent_id is not None:
+                    primary.parent = None
+                    primary.save(update_fields=['parent'])
+
                 others = sorted_group[1:]
                 for o in others:
                     o.children.update(parent=primary, position=0)
@@ -1883,4 +1926,158 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             'merged_members_count': sum(len(g['members']) + 1 for g in preview),
             'message': f'تم دمج {len(preview)} مجموعة بنجاح'
         })
+
+    @action(detail=False, methods=['get'])
+    def templates(self, request):
+        """List all saved route templates."""
+        templates = RouteTemplate.objects.all().order_by('-updated_at')
+        serializer = RouteTemplateSerializer(templates, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def save_template(self, request):
+        """Save current active route ordering and hierarchy as a reusable template."""
+        year = request.data.get('year', timezone.now().year)
+        month = request.data.get('month', timezone.now().month)
+        name = request.data.get('name', '').strip()
+        description = request.data.get('description', '').strip()
+
+        try:
+            year = int(year)
+            month = int(month)
+        except (TypeError, ValueError):
+            return Response({'error': 'السنة أو الشهر غير صحيح'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not name:
+            name = f"خط سير {month}/{year} المحفوظ"
+
+        stops = DeliveryStop.objects.filter(
+            year=year, month=month, parent__isnull=True
+        ).select_related('member').prefetch_related('children__member').order_by('position', 'id')
+
+        if not stops.exists():
+            return Response({'error': 'لا توجد محطات في خط سير هذا الشهر لحفظها كقالب'}, status=status.HTTP_400_BAD_REQUEST)
+
+        stops_data = []
+        for s in stops:
+            children_member_ids = list(s.children.values_list('member_id', flat=True))
+            stops_data.append({
+                'member_id': s.member_id,
+                'member_name': s.member.full_name,
+                'street_number': s.member.street_number,
+                'position': s.position,
+                'children_member_ids': children_member_ids
+            })
+
+        template = RouteTemplate.objects.create(
+            name=name,
+            description=description,
+            stops_data=stops_data
+        )
+        return Response(RouteTemplateSerializer(template).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def apply_template(self, request):
+        """Apply a saved template or copy order and groups from previous month."""
+        target_year = request.data.get('year', timezone.now().year)
+        target_month = request.data.get('month', timezone.now().month)
+        template_id = request.data.get('template_id')
+        source_year = request.data.get('source_year')
+        source_month = request.data.get('source_month')
+
+        try:
+            target_year = int(target_year)
+            target_month = int(target_month)
+        except (TypeError, ValueError):
+            return Response({'error': 'السنة أو الشهر المستهدف غير صحيح'}, status=status.HTTP_400_BAD_REQUEST)
+
+        stops_data = None
+        source_label = ""
+        if template_id:
+            tpl = get_object_or_404(RouteTemplate, id=template_id)
+            stops_data = tpl.stops_data
+            source_label = f"قالب \"{tpl.name}\""
+        elif source_year and source_month:
+            try:
+                source_year = int(source_year)
+                source_month = int(source_month)
+            except (TypeError, ValueError):
+                return Response({'error': 'الشهر أو السنة المصدر غير صحيح'}, status=status.HTTP_400_BAD_REQUEST)
+            source_stops = DeliveryStop.objects.filter(
+                year=source_year, month=source_month, parent__isnull=True
+            ).prefetch_related('children').order_by('position', 'id')
+            stops_data = []
+            for s in source_stops:
+                stops_data.append({
+                    'member_id': s.member_id,
+                    'position': s.position,
+                    'children_member_ids': list(s.children.values_list('member_id', flat=True))
+                })
+            source_label = f"ترتيب شهر {source_month}/{source_year}"
+        else:
+            return Response({'error': 'يجب تحديد معرف القالب أو الشهر المصدر'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not stops_data:
+            return Response({'error': 'خط السير المصدر فارغ، لا توجد محطات لتطبيقها'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            applied_count = 0
+            existing_stops = {
+                s.member_id: s for s in DeliveryStop.objects.filter(year=target_year, month=target_month)
+            }
+
+            for idx, item in enumerate(stops_data, start=1):
+                m_id = item['member_id']
+                if not Member.objects.filter(id=m_id, is_active=True, is_deleted=False).exists():
+                    continue
+
+                primary_stop = existing_stops.get(m_id)
+                if not primary_stop:
+                    primary_stop = DeliveryStop.objects.create(
+                        member_id=m_id,
+                        year=target_year,
+                        month=target_month,
+                        position=idx,
+                        status='PENDING'
+                    )
+                    existing_stops[m_id] = primary_stop
+                else:
+                    primary_stop.position = idx
+                    primary_stop.parent = None
+                    primary_stop.save(update_fields=['position', 'parent'])
+                applied_count += 1
+
+                for child_m_id in item.get('children_member_ids', []):
+                    if not Member.objects.filter(id=child_m_id, is_active=True, is_deleted=False).exists():
+                        continue
+                    child_stop = existing_stops.get(child_m_id)
+                    if not child_stop:
+                        child_stop = DeliveryStop.objects.create(
+                            member_id=child_m_id,
+                            year=target_year,
+                            month=target_month,
+                            position=0,
+                            parent=primary_stop,
+                            status='PENDING'
+                        )
+                        existing_stops[child_m_id] = child_stop
+                    else:
+                        child_stop.parent = primary_stop
+                        child_stop.position = 0
+                        child_stop.save(update_fields=['parent', 'position'])
+
+            renumber_pending_stops(target_year, target_month)
+
+        return Response({
+            'success': True,
+            'message': f'تم تطبيق {source_label} بنجاح على شهر {target_month}/{target_year}',
+            'stops_count': applied_count
+        })
+
+    @action(detail=False, methods=['delete'], url_path='templates/(?P<template_id>[^/.]+)')
+    def delete_template(self, request, template_id=None):
+        tpl = get_object_or_404(RouteTemplate, id=template_id)
+        tpl.delete()
+        return Response({'success': True, 'message': 'تم حذف القالب بنجاح'})
+
 
