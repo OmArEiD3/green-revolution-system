@@ -1,0 +1,16 @@
+[33mcommit b287f3ba541bd39445580c008e575430f74c9d8d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Project Maintenance <dev@green-revolution-system.local>
+Date:   Sat Oct 17 16:50:02 2026 +0300
+
+    Fix pagination bug causing member/practice/payment lists to cut off at 50
+
+ .../db.sqlite3.backup_safety_dev_20261017_161757   |  Bin [31m0[m -> [32m356352[m bytes
+ ...template_deliverystop_custom_amount_and_more.py |   39 [32m+[m
+ backend/management/models.py                       |   25 [32m+[m
+ backend/management/serializers.py                  |   72 [32m+[m[31m-[m
+ backend/management/tests.py                        |   51 [32m+[m
+ backend/management/views.py                        |  229 [32m++++[m[31m-[m
+ frontend/src/api/client.ts                         |   35 [32m+[m[31m-[m
+ frontend/src/components/DeliveryView.tsx           | 1034 [32m++++++++++++++++[m[31m----[m
+ frontend/src/types/index.ts                        |   15 [32m+[m
+ 9 files changed, 1295 insertions(+), 205 deletions(-)

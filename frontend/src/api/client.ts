@@ -330,6 +330,7 @@ export const deliveryApi = {
     custom_amount?: number | string;
     custom_receipt_number?: string;
     notes?: string;
+    merge_with_guard?: boolean;
   }): Promise<DeliveryStop> => {
     const res = await api.post('/delivery-stops/', data);
     return res.data;
@@ -344,6 +345,7 @@ export const deliveryApi = {
     source: 'receipts' | 'all';
     street?: number | string;
     member_type?: string;
+    auto_merge_guards?: boolean;
   }): Promise<{ added_count: number; message: string }> => {
     const res = await api.post('/delivery-stops/bulk_add/', data);
     return res.data;

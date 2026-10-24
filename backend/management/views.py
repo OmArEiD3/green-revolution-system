@@ -1320,6 +1320,39 @@ def renumber_pending_stops(year, month):
             stop.save(update_fields=['position'])
 
 
+def normalize_guard_phone(phone):
+    if not phone:
+        return ''
+    digits = re.sub(r'\D', '', str(phone))
+    if len(digits) >= 8:
+        return digits[-10:]
+    return ''
+
+
+def normalize_guard_name(name):
+    if not name:
+        return ''
+    name = re.sub(r'[\s_]+', ' ', str(name).strip()).lower()
+    trans = str.maketrans('أإآةى', 'اااهي')
+    normalized = name.translate(trans)
+    return normalized if len(normalized) >= 2 else ''
+
+
+def get_member_guard_keys(member):
+    """Return set of identifiers representing the responsible guard for auto-merging."""
+    keys = set()
+    p1 = normalize_guard_phone(member.guard_mobile)
+    if p1:
+        keys.add(f"phone:{p1}")
+    p2 = normalize_guard_phone(member.guard_mobile_2)
+    if p2:
+        keys.add(f"phone:{p2}")
+    g_name = normalize_guard_name(member.guard_name)
+    if g_name and (member.has_guard or p1 or p2 or len(g_name) >= 3):
+        keys.add(f"name:{g_name}")
+    return keys
+
+
 class DeliveryStopViewSet(viewsets.ModelViewSet):
     serializer_class = DeliveryStopSerializer
     permission_classes = [IsAuthenticated]
@@ -1420,18 +1453,45 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             year = serializer.validated_data['year']
             month = serializer.validated_data['month']
             desired_pos = self.request.data.get('position')
+            explicit_parent = serializer.validated_data.get('parent')
 
-            if desired_pos is not None:
+            auto_merge = self.request.data.get('merge_with_guard') or self.request.data.get('auto_merge')
+            if isinstance(auto_merge, str):
+                auto_merge = auto_merge.lower() in ('true', '1')
+
+            matched_parent = None
+            # If auto_merge requested and user didn't specify an explicit position/parent, check matching guard
+            if auto_merge and not explicit_parent and (desired_pos is None or desired_pos == ''):
+                member_keys = get_member_guard_keys(member)
+                if member_keys:
+                    existing_stops = DeliveryStop.objects.filter(
+                        year=year, month=month, status='PENDING'
+                    ).select_related('member', 'parent')
+
+                    for stop in existing_stops:
+                        stop_keys = get_member_guard_keys(stop.member)
+                        if member_keys & stop_keys:
+                            matched_parent = stop.parent if stop.parent_id else stop
+                            break
+
+            if matched_parent:
+                instance = serializer.save(parent=matched_parent, position=0)
+            elif desired_pos is not None:
                 try:
                     desired_pos = int(desired_pos)
                 except (TypeError, ValueError):
                     desired_pos = None
 
-            if desired_pos is not None and desired_pos > 0:
-                DeliveryStop.objects.filter(
-                    year=year, month=month, status='PENDING', parent__isnull=True, position__gte=desired_pos
-                ).update(position=F('position') + 1)
-                instance = serializer.save(position=desired_pos)
+                if desired_pos is not None and desired_pos > 0:
+                    DeliveryStop.objects.filter(
+                        year=year, month=month, status='PENDING', parent__isnull=True, position__gte=desired_pos
+                    ).update(position=F('position') + 1)
+                    instance = serializer.save(position=desired_pos)
+                else:
+                    max_pos = DeliveryStop.objects.filter(
+                        year=year, month=month, status='PENDING', parent__isnull=True
+                    ).aggregate(m=Max('position'))['m'] or 0
+                    instance = serializer.save(position=max_pos + 1)
             else:
                 max_pos = DeliveryStop.objects.filter(
                     year=year, month=month, status='PENDING', parent__isnull=True
@@ -1492,22 +1552,63 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
         if not members:
             return Response({'added_count': 0, 'message': 'لم يتم العثور على أعضاء جدد لإضافتهم'}, status=status.HTTP_200_OK)
 
+        auto_merge_guards = request.data.get('auto_merge_guards', False)
+        if isinstance(auto_merge_guards, str):
+            auto_merge_guards = auto_merge_guards.lower() in ('true', '1')
+
         with transaction.atomic():
             max_pos = DeliveryStop.objects.filter(
                 year=year, month=month, status='PENDING', parent__isnull=True
             ).aggregate(m=Max('position'))['m'] or 0
 
+            # Preload existing stops for the month to match existing guard groups if requested
+            existing_stops = DeliveryStop.objects.filter(
+                year=year, month=month, status='PENDING'
+            ).select_related('member', 'parent')
+
+            guard_to_primary = {}
+            if auto_merge_guards:
+                for s in existing_stops:
+                    prim = s.parent if s.parent_id else s
+                    for k in get_member_guard_keys(s.member):
+                        guard_to_primary[k] = prim
+
             new_stops = []
             for m in members:
-                max_pos += 1
-                new_stops.append(DeliveryStop(
-                    member=m,
-                    year=year,
-                    month=month,
-                    position=max_pos,
-                    status='PENDING'
-                ))
-            DeliveryStop.objects.bulk_create(new_stops)
+                m_keys = get_member_guard_keys(m)
+                matched_prim = None
+                if auto_merge_guards:
+                    for k in m_keys:
+                        if k in guard_to_primary:
+                            matched_prim = guard_to_primary[k]
+                            break
+
+                if matched_prim:
+                    new_stop = DeliveryStop.objects.create(
+                        member=m,
+                        year=year,
+                        month=month,
+                        position=0,
+                        status='PENDING',
+                        parent=matched_prim
+                    )
+                    for k in m_keys:
+                        guard_to_primary[k] = matched_prim
+                    new_stops.append(new_stop)
+                else:
+                    max_pos += 1
+                    new_stop = DeliveryStop.objects.create(
+                        member=m,
+                        year=year,
+                        month=month,
+                        position=max_pos,
+                        status='PENDING'
+                    )
+                    if auto_merge_guards:
+                        for k in m_keys:
+                            guard_to_primary[k] = new_stop
+                    new_stops.append(new_stop)
+
             renumber_pending_stops(year, month)
 
         return Response({
@@ -1848,37 +1949,57 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             year=year, month=month, status='PENDING'
         ).select_related('member')
 
-        guard_groups = {}
-        for s in stops:
-            phones = []
-            if s.member.guard_mobile:
-                c1 = re.sub(r'\D', '', s.member.guard_mobile)
-                if len(c1) >= 8:
-                    phones.append(c1)
-            if s.member.guard_mobile_2:
-                c2 = re.sub(r'\D', '', s.member.guard_mobile_2)
-                if len(c2) >= 8:
-                    phones.append(c2)
+        stop_list = list(stops)
+        key_to_stops = {}
+        for s in stop_list:
+            keys = get_member_guard_keys(s.member)
+            for k in keys:
+                key_to_stops.setdefault(k, set()).add(s.id)
 
-            for p in phones:
-                guard_groups.setdefault(p, []).append(s)
-                break  # match on first valid guard phone
+        # Merge connected sets of stop IDs
+        stop_by_id = {s.id: s for s in stop_list}
+        visited_stop_ids = set()
+        merged_groups = []
 
-        mergeable_groups = {}
-        for k, v in guard_groups.items():
-            # Deduplicate by stop id
-            unique_stops = {s.id: s for s in v}.values()
-            if len(unique_stops) > 1:
-                mergeable_groups[k] = list(unique_stops)
+        for s in stop_list:
+            if s.id in visited_stop_ids:
+                continue
+            s_keys = get_member_guard_keys(s.member)
+            if not s_keys:
+                continue
+
+            # BFS to find all connected stops
+            component_ids = set()
+            queue = [s.id]
+            visited_in_comp = {s.id}
+
+            while queue:
+                curr_id = queue.pop(0)
+                component_ids.add(curr_id)
+                curr_stop = stop_by_id[curr_id]
+                for k in get_member_guard_keys(curr_stop.member):
+                    for neighbor_id in key_to_stops.get(k, ()):
+                        if neighbor_id not in visited_in_comp:
+                            visited_in_comp.add(neighbor_id)
+                            queue.append(neighbor_id)
+
+            visited_stop_ids.update(component_ids)
+            if len(component_ids) > 1:
+                group_stops = [stop_by_id[sid] for sid in component_ids]
+                merged_groups.append(group_stops)
 
         preview = []
-        for phone, group in mergeable_groups.items():
+        for group in merged_groups:
             sorted_group = sorted(group, key=lambda x: (x.position if x.position > 0 else 999999, x.id))
             primary = sorted_group[0]
             others = sorted_group[1:]
+
+            g_phone = primary.member.guard_mobile or primary.member.guard_mobile_2 or (others[0].member.guard_mobile if others else '')
+            g_name = primary.member.guard_name or (others[0].member.guard_name if others else 'مسجل')
+
             preview.append({
-                'guard_mobile': phone,
-                'guard_name': primary.member.guard_name or (others[0].member.guard_name if others else 'مسجل'),
+                'guard_mobile': g_phone,
+                'guard_name': g_name,
                 'primary': {
                     'id': primary.id,
                     'member_name': primary.member.full_name,
@@ -1904,10 +2025,9 @@ class DeliveryStopViewSet(viewsets.ModelViewSet):
             })
 
         with transaction.atomic():
-            for phone, group in mergeable_groups.items():
+            for group in merged_groups:
                 sorted_group = sorted(group, key=lambda x: (x.position if x.position > 0 else 999999, x.id))
                 primary = sorted_group[0]
-                # Ensure primary is not a child of anyone else so no 3-level tree or ghost records form
                 if primary.parent_id is not None:
                     primary.parent = None
                     primary.save(update_fields=['parent'])

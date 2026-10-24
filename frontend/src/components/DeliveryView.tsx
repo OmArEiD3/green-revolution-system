@@ -4,7 +4,7 @@ import {
   Phone, Compass, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine,
   Trash2, GitMerge, AlertCircle, Sparkles, Check, X, MoveVertical,
   Printer, BookmarkCheck, FolderDown, DollarSign, Layers, Edit3,
-  Calendar, Info, Clock
+  Calendar, Info, Clock, UserPlus, Shield, Filter
 } from 'lucide-react';
 import { DeliveryStop, DeliveryAutoMergeGroup, Member, RouteTemplate } from '../types';
 import { deliveryApi, membersApi } from '../api/client';
@@ -57,6 +57,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
   const [bulkSource, setBulkSource] = useState<'receipts' | 'all'>('receipts');
   const [bulkStreet, setBulkStreet] = useState<number | ''>('');
   const [bulkType, setBulkType] = useState<string>('ALL');
+  const [bulkAutoMerge, setBulkAutoMerge] = useState(true);
 
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [allMembers, setAllMembers] = useState<Member[]>([]);
@@ -65,6 +66,9 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
   const [addPosition, setAddPosition] = useState<string>('');
   const [addCustomAmount, setAddCustomAmount] = useState<string>('');
   const [addCustomReceipt, setAddCustomReceipt] = useState<string>('');
+  const [modalStreetFilter, setModalStreetFilter] = useState<number | ''>('');
+  const [modalHideAlreadyAdded, setModalHideAlreadyAdded] = useState(true);
+  const [mergeWithGuard, setMergeWithGuard] = useState(true);
 
   const [isAutoMergeOpen, setIsAutoMergeOpen] = useState(false);
   const [autoMergePreview, setAutoMergePreview] = useState<DeliveryAutoMergeGroup[]>([]);
@@ -135,6 +139,38 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
       console.error(err);
     }
   };
+
+  // Set of member IDs already in the current route
+  const existingMemberIds = useMemo(() => {
+    const ids = new Set<number>();
+    stops.forEach((s) => {
+      ids.add(s.member);
+      s.merged?.forEach((m) => ids.add(m.member));
+    });
+    return ids;
+  }, [stops]);
+
+  // Find if selected member shares a guard with an existing stop in this month
+  const matchingExistingGuardStop = useMemo(() => {
+    if (!selectedMemberToAdd) return null;
+    const m = selectedMemberToAdd;
+    const p1 = m.guard_mobile?.replace(/\D/g, '').slice(-10);
+    const p2 = m.guard_mobile_2?.replace(/\D/g, '').slice(-10);
+    const gName = m.guard_name?.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+    if (!p1 && !p2 && (!gName || gName.length < 2)) return null;
+
+    return stops.find((s) => {
+      const sp1 = s.guard_mobile?.replace(/\D/g, '').slice(-10);
+      const sp2 = s.guard_mobile_2?.replace(/\D/g, '').slice(-10);
+      const sName = s.guard_name?.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const phoneMatch = Boolean(
+        (p1 && (p1 === sp1 || p1 === sp2)) ||
+        (p2 && (p2 === sp1 || p2 === sp2))
+      );
+      const nameMatch = Boolean(gName && sName && gName === sName);
+      return phoneMatch || nameMatch;
+    });
+  }, [selectedMemberToAdd, stops]);
 
   // Load saved templates
   const loadTemplates = async () => {
@@ -366,6 +402,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
         source: bulkSource,
         street: bulkStreet || undefined,
         member_type: bulkType !== 'ALL' ? bulkType : undefined,
+        auto_merge_guards: bulkAutoMerge,
       });
       setIsBulkAddOpen(false);
       showToast(res.message);
@@ -389,13 +426,18 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
         position: addPosition ? parseInt(addPosition, 10) : undefined,
         custom_amount: addCustomAmount ? parseFloat(addCustomAmount) : undefined,
         custom_receipt_number: addCustomReceipt || undefined,
+        merge_with_guard: mergeWithGuard,
       });
+      const memberName = selectedMemberToAdd.full_name;
+      const guardNotice = matchingExistingGuardStop && mergeWithGuard
+        ? ` وتم دمجه تلقائياً مع محطة الغفير (${matchingExistingGuardStop.guard_name || matchingExistingGuardStop.member_name})`
+        : '';
       setIsAddMemberOpen(false);
       setSelectedMemberToAdd(null);
       setAddPosition('');
       setAddCustomAmount('');
       setAddCustomReceipt('');
-      showToast('تمت إضافة العضو إلى خط السير');
+      showToast(`تمت إضافة العضو "${memberName}" إلى خط السير بنجاح${guardNotice}`);
       loadStops();
     } catch (err: any) {
       const msg = err?.response?.data?.member || err?.response?.data?.error || 'فشلت إضافة العضو';
@@ -592,30 +634,30 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
               {/* Auto Fill */}
               <button
                 onClick={() => setIsBulkAddOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-95"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>تعبئة تلقائية</span>
               </button>
 
-              {/* Add Single Member */}
+              {/* Add Single Member - Distinct Vibrant Styling */}
               <button
                 onClick={() => {
                   loadAllMembers();
                   setIsAddMemberOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-all cursor-pointer active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white text-xs font-black shadow-md shadow-indigo-600/30 border border-indigo-400/40 ring-2 ring-indigo-400/20 transition-all cursor-pointer active:scale-95"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>إضافة عضو</span>
+                <UserPlus className="w-4 h-4 stroke-[2.5]" />
+                <span>إضافة عضو لخط السير</span>
               </button>
 
-              {/* Auto Merge by Guard */}
+              {/* Auto Merge by Guard - Distinct Amber Styling */}
               <button
                 onClick={handleOpenAutoMergeModal}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-bold border border-teal-500/30 transition-all cursor-pointer active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-black shadow-md shadow-amber-600/20 border border-amber-400/40 transition-all cursor-pointer active:scale-95"
               >
-                <GitMerge className="w-3.5 h-3.5" />
+                <GitMerge className="w-4 h-4 stroke-[2.5]" />
                 <span>دمج بالغفير</span>
               </button>
 
@@ -731,41 +773,41 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
 
       {/* Main Tabs Navigation (Pending vs Delivered) & Stats */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
-          {/* Pending Route Tab */}
+        <div className="flex items-center gap-2.5">
+          {/* Pending Route Tab - Vibrant Indigo */}
           <button
             onClick={() => setActiveSubTab('pending')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
               activeSubTab === 'pending'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500/20'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white shadow-lg shadow-indigo-900/30 ring-2 ring-indigo-400/40'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-800'
             }`}
           >
-            <Truck className="w-4 h-4" />
+            <Truck className={`w-4 h-4 ${activeSubTab === 'pending' ? 'text-blue-200' : 'text-slate-400'}`} />
             <span>خط السير (قيد التسليم)</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-xs font-black ${
-                activeSubTab === 'pending' ? 'bg-emerald-800 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                activeSubTab === 'pending' ? 'bg-indigo-950 text-indigo-100 border border-indigo-400/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
               {pendingStops.length}
             </span>
           </button>
 
-          {/* Delivered Tab */}
+          {/* Delivered Tab - Rich Emerald */}
           <button
             onClick={() => setActiveSubTab('delivered')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
               activeSubTab === 'delivered'
-                ? 'bg-slate-800 text-white shadow-md shadow-slate-900/30'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                ? 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-lg shadow-emerald-900/30 ring-2 ring-emerald-400/40'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-800'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className={`w-4 h-4 ${activeSubTab === 'delivered' ? 'text-emerald-200' : 'text-emerald-500'}`} />
             <span>تم التسليم</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-xs font-black ${
-                activeSubTab === 'delivered' ? 'bg-slate-950 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                activeSubTab === 'delivered' ? 'bg-emerald-950 text-emerald-100 border border-emerald-400/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
               {deliveredStops.length}
@@ -963,7 +1005,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                         <div className="flex flex-wrap items-center gap-2">
                           <span
                             onClick={() => onSelectMember?.(stop.member)}
-                            className="font-black text-sm sm:text-base text-slate-900 dark:text-white hover:text-emerald-500 cursor-pointer truncate"
+                            className="font-black text-base sm:text-lg text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer truncate transition-colors"
                           >
                             {stop.member_name}
                           </span>
@@ -972,21 +1014,21 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                           <span
                             className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
                               stop.member_type === 'COMMERCIAL'
-                                ? 'bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-slate-700'
-                                : 'bg-emerald-50 dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-slate-700'
+                                ? 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
                             }`}
                           >
                             {stop.member_type_display}
                           </span>
 
                           {/* Street Badge */}
-                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                             شارع {stop.street_number}
                           </span>
 
                           {/* Merged Group Badge */}
                           {isGroup && (
-                            <span className="text-[11px] font-black bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-slate-700 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="text-[11px] font-black bg-indigo-50 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-200 border-2 border-indigo-300 dark:border-indigo-700 px-3 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
                               <Users className="w-3 h-3" />
                               <span>مجموعة: {stop.group_members_count} أعضاء</span>
                             </span>
@@ -1008,14 +1050,15 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                             <span className="text-slate-400">بدون هاتف</span>
                           )}
 
-                          {/* Guard Info */}
+                          {/* Guard Info - Distinct Amber Badge */}
                           {stop.has_guard || stop.guard_name || stop.guard_mobile ? (
-                            <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/50 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 text-[11px]">
+                            <span className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 rounded-xl border border-amber-300 dark:border-amber-700/60 text-xs font-bold text-amber-900 dark:text-amber-200 shadow-xs">
+                              <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                               <span>الغفير: {stop.guard_name || 'مسجل'}</span>
                               {stop.guard_mobile && (
                                 <a
                                   href={`tel:${stop.guard_mobile}`}
-                                  className="text-emerald-600 font-bold hover:underline"
+                                  className="text-amber-800 dark:text-amber-300 font-black hover:underline mr-1"
                                 >
                                   ({stop.guard_mobile})
                                 </a>
@@ -1023,7 +1066,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                               {stop.guard_mobile_2 && (
                                 <a
                                   href={`tel:${stop.guard_mobile_2}`}
-                                  className="text-emerald-600 font-bold hover:underline"
+                                  className="text-amber-800 dark:text-amber-300 font-black hover:underline"
                                 >
                                   - ({stop.guard_mobile_2})
                                 </a>
@@ -1383,6 +1426,32 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                   <option value="COMMERCIAL">تجاري فقط</option>
                 </select>
               </div>
+
+              {/* Auto-Merge Guards Toggle in Bulk Add */}
+              <div
+                onClick={() => setBulkAutoMerge(!bulkAutoMerge)}
+                className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700/60 flex items-center justify-between cursor-pointer transition-colors hover:bg-amber-100/70"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300">
+                    <GitMerge className="w-4 h-4 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-amber-950 dark:text-amber-200">
+                      دمج الأعضاء التابعين لنفس الغفير تلقائياً
+                    </div>
+                    <div className="text-[11px] text-amber-800/90 dark:text-amber-300/90">
+                      دمج المشتركين في محطة واحدة إذا كان يحصلون على نفس الغفير المسؤل
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={bulkAutoMerge}
+                  onChange={(e) => setBulkAutoMerge(e.target.checked)}
+                  className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -1406,72 +1475,251 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
         </div>
       )}
 
-      {/* 2. Add Single Member Modal */}
+      {/* 2. Add Single Member Modal - Completely Upgraded High-Contrast Design */}
       {isAddMemberOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 animate-scale-up max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="font-black text-base text-slate-900 dark:text-white">إضافة عضو إلى خط السير</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full shadow-2xl border-2 border-indigo-500/40 animate-scale-up max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header - Distinct Vibrant Indigo Gradient */}
+            <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 text-white p-4 sm:p-5 flex items-center justify-between shrink-0 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-white/15 border border-white/20 text-amber-300 shadow-inner">
+                  <UserPlus className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-white">إضافة عضو إلى خط السير</h3>
+                  <p className="text-[11px] text-indigo-100 font-medium">
+                    اختر العضو لضمه لخط سير تسليمات شهر {month} / {year}
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsAddMemberOpen(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="text-white/70 hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
-              <input
-                type="text"
-                placeholder="ابحث بالاسم أو رقم الشارع أو الهاتف..."
-                value={memberSearch}
-                onChange={(e) => setMemberSearch(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold"
-              />
+            <div className="p-4 sm:p-5 space-y-3.5 flex-1 overflow-y-auto flex flex-col">
+              {/* Search & Street Filters Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="ابحث بالاسم، الشارع، أو الغفير..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    className="w-full pr-9 pl-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-indigo-500 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none transition-colors"
+                  />
+                  {memberSearch && (
+                    <button
+                      onClick={() => setMemberSearch('')}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
 
-              {/* Members List */}
-              <div className="flex-1 overflow-y-auto space-y-1.5 max-h-48 pr-1">
-                {allMembers
-                  .filter((m) =>
-                    !memberSearch ||
-                    m.full_name.includes(memberSearch) ||
-                    m.mobile_number.includes(memberSearch) ||
-                    String(m.street_number) === memberSearch
-                  )
-                  .map((m) => {
-                    const isSelected = selectedMemberToAdd?.id === m.id;
-                    return (
-                      <div
-                        key={m.id}
-                        onClick={() => setSelectedMemberToAdd(m)}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 font-black'
-                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-xs sm:text-sm font-bold">{m.full_name}</div>
-                          <div className="text-[11px] text-slate-500">
-                            شارع {m.street_number} • {m.member_type === 'COMMERCIAL' ? 'تجاري' : 'سكني'}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={modalStreetFilter}
+                    onChange={(e) => setModalStreetFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-indigo-500 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                  >
+                    <option value="">جميع الشوارع</option>
+                    {Array.from({ length: 20 }, (_, i) => i + 1).map((s) => (
+                      <option key={s} value={s}>
+                        شارع {s}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer shrink-0 select-none bg-slate-100 dark:bg-slate-800 px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={modalHideAlreadyAdded}
+                      onChange={(e) => setModalHideAlreadyAdded(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                    />
+                    <span>إخفاء المضافين</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Members Selection List with Clear Visual Distinctions */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 px-1">
+                  <span>قائمة المشتركين المتاحين:</span>
+                  <span>اضغط على العضو لتحديده</span>
+                </div>
+
+                <div className="overflow-y-auto space-y-1.5 max-h-48 sm:max-h-52 pr-1 rounded-2xl border-2 border-slate-100 dark:border-slate-800 p-1.5 bg-slate-50/50 dark:bg-slate-900/50">
+                  {allMembers
+                    .filter((m) => {
+                      if (modalHideAlreadyAdded && existingMemberIds.has(m.id)) return false;
+                      if (modalStreetFilter && m.street_number !== modalStreetFilter) return false;
+                      if (!memberSearch) return true;
+                      const q = memberSearch.trim().toLowerCase();
+                      return (
+                        m.full_name.toLowerCase().includes(q) ||
+                        m.mobile_number.includes(q) ||
+                        String(m.street_number) === q ||
+                        m.guard_name?.toLowerCase().includes(q) ||
+                        m.guard_mobile?.includes(q)
+                      );
+                    })
+                    .map((m) => {
+                      const isSelected = selectedMemberToAdd?.id === m.id;
+                      const isAlreadyInRoute = existingMemberIds.has(m.id);
+
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => {
+                            if (!isAlreadyInRoute) {
+                              setSelectedMemberToAdd(m);
+                            }
+                          }}
+                          className={`p-3 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all duration-150 ${
+                            isAlreadyInRoute
+                              ? 'opacity-40 bg-slate-100 dark:bg-slate-800/40 border-dashed border-slate-300 dark:border-slate-700 cursor-not-allowed'
+                              : isSelected
+                              ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-950 dark:text-indigo-100 shadow-md ring-2 ring-indigo-500/30'
+                              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-xs'
+                          }`}
+                        >
+                          <div className="min-w-0 space-y-1">
+                            {/* Member Name in Prominent Bold Font */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
+                                {m.full_name}
+                              </span>
+                              {isAlreadyInRoute && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                  مضاف بالفعل
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Street, Type, and Guard Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                              <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
+                                شارع {m.street_number}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-bold ${
+                                  m.member_type === 'COMMERCIAL'
+                                    ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-200 border border-purple-200'
+                                    : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-200'
+                                }`}
+                              >
+                                {m.member_type === 'COMMERCIAL' ? 'تجاري' : 'سكني'}
+                              </span>
+
+                              {/* Guard Tag if member has guard */}
+                              {(m.has_guard || m.guard_name || m.guard_mobile) && (
+                                <span className="px-2 py-0.5 rounded-md font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 flex items-center gap-1">
+                                  <Shield className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                  <span>الغفير: {m.guard_name || 'مسجل'}</span>
+                                  {m.guard_mobile && <span className="font-semibold text-slate-600 dark:text-slate-300">({m.guard_mobile})</span>}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 mr-2">
+                            {isSelected ? (
+                              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                                <Check className="w-4 h-4 stroke-[3]" />
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+                            )}
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-emerald-600" />}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                </div>
               </div>
+
+              {/* HERO SHOWCASE CARD: SELECTED MEMBER PROMINENT DISPLAY */}
+              {selectedMemberToAdd ? (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white border-2 border-indigo-400 shadow-xl space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between border-b border-indigo-800/60 pb-2">
+                    <span className="text-xs font-black text-indigo-300 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      العضو المختار للإضافة في خط السير:
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                      شارع {selectedMemberToAdd.street_number} • {selectedMemberToAdd.member_type === 'COMMERCIAL' ? 'تجاري' : 'سكني'}
+                    </span>
+                  </div>
+
+                  {/* PROMINENT MEMBER FULL NAME */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="text-lg sm:text-2xl font-black text-amber-300 tracking-wide drop-shadow-md">
+                      {selectedMemberToAdd.full_name}
+                    </div>
+                    {selectedMemberToAdd.mobile_number && (
+                      <span className="text-xs font-bold text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700 self-start sm:self-auto">
+                        📞 {selectedMemberToAdd.mobile_number}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Guard Match & Auto-Merge Banner */}
+                  {matchingExistingGuardStop ? (
+                    <div className="p-3 rounded-xl bg-amber-500/20 border-2 border-amber-400/60 text-amber-200 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-black text-amber-300">
+                        <GitMerge className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>تطابق الغفير المسؤل!</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-amber-100 font-medium">
+                        يحمل نفس الغفير المسؤل <strong className="text-white underline font-black">({selectedMemberToAdd.guard_name || matchingExistingGuardStop.guard_name || 'مسجل'})</strong> لمحطة موجودة بالفعل في خط السير: <strong className="text-amber-300 font-black">المحطة #{matchingExistingGuardStop.position} ({matchingExistingGuardStop.member_name})</strong>
+                      </p>
+                      <label className="flex items-center gap-2 cursor-pointer pt-1 border-t border-amber-400/30 select-none">
+                        <input
+                          type="checkbox"
+                          checked={mergeWithGuard}
+                          onChange={(e) => setMergeWithGuard(e.target.checked)}
+                          className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                        />
+                        <span className="text-xs font-black text-white hover:text-amber-200">
+                          دمج هذا العضو تلقائياً مع محطة هذا الغفير في خط السير
+                        </span>
+                      </label>
+                    </div>
+                  ) : selectedMemberToAdd.guard_name || selectedMemberToAdd.guard_mobile ? (
+                    <div className="flex items-center gap-2 bg-indigo-900/50 border border-indigo-700/60 text-indigo-200 px-3 py-2 rounded-xl text-xs font-medium">
+                      <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span>
+                        الغفير المسؤل: <strong className="text-white font-bold">{selectedMemberToAdd.guard_name || 'مسجل'}</strong> {selectedMemberToAdd.guard_mobile ? `(${selectedMemberToAdd.guard_mobile})` : ''} — سيؤسس محطة جديدة لهذا الغفير في خط السير
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/60">
+                      بدون غفير مسجل — ستتم إضافته كمحطة مستقلة جديدة
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/30 dark:bg-indigo-950/20 text-center text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                  يرجى النقر على أحد الأعضاء في القائمة أعلاه لتحديده وعرض تفاصيله
+                </div>
+              )}
 
               {/* Optional Custom Position & Amount Inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    الموضع (افتراضي: الأخير):
+                    الموضع اليدوي (اختياري):
                   </label>
                   <input
                     type="number"
                     min="1"
-                    placeholder="رقم الترتيب"
+                    placeholder="افتراضي: الأخير أو مدمج"
                     value={addPosition}
                     onChange={(e) => setAddPosition(e.target.value)}
                     className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
@@ -1505,11 +1753,12 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsAddMemberOpen(false)}
-                className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer"
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold cursor-pointer transition-colors"
               >
                 إلغاء
               </button>
@@ -1517,9 +1766,10 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ year, month, onSelec
                 type="button"
                 onClick={handleExecuteAddMember}
                 disabled={!selectedMemberToAdd || actionLoading}
-                className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-black shadow-md cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 disabled:opacity-50 text-white text-xs sm:text-sm font-black shadow-lg shadow-indigo-600/30 cursor-pointer active:scale-95 transition-all"
               >
-                إضافة لخط السير
+                <UserPlus className="w-4 h-4 stroke-[2.5]" />
+                <span>إضافة العضو لخط السير</span>
               </button>
             </div>
           </div>

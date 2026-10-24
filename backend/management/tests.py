@@ -597,6 +597,26 @@ class DeliveryRouteFeatureTests(TestCase):
         self.assertEqual(s2.parent, s1)
         self.assertEqual(s2.position, 0)
 
+    def test_auto_merge_by_guard_name_and_on_create(self):
+        """18b. Test auto merge by guard name without phone, and auto merge on create"""
+        m_guard_a = Member.objects.create(full_name="عضو حارس 1", street_number=2, has_guard=True, guard_name="عم رجب")
+        m_guard_b = Member.objects.create(full_name="عضو حارس 2", street_number=3, has_guard=True, guard_name="عم رجب")
+
+        # Create stop for member A
+        stop_a = DeliveryStop.objects.create(member=m_guard_a, year=2026, month=11, position=1)
+
+        # Create stop for member B with merge_with_guard=True
+        res = self.client.post('/api/delivery-stops/', {
+            'member': m_guard_b.id,
+            'year': 2026,
+            'month': 11,
+            'merge_with_guard': True
+        })
+        self.assertEqual(res.status_code, 201)
+        stop_b = DeliveryStop.objects.get(member=m_guard_b, year=2026, month=11)
+        self.assertEqual(stop_b.parent, stop_a)
+        self.assertEqual(stop_b.position, 0)
+
     def test_delete_member_cascades_route_stops(self):
         """19. Deleting member cascades delivery stops cleanly without ProtectError"""
         new_member = Member.objects.create(full_name="عضو تجريبي للحذف", street_number=1)

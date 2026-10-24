@@ -94,17 +94,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             {navItems.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const isDelivery = tab.id === 'delivery';
+
+              let activeClass = 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50 scale-[1.02]';
+              if (isDelivery) {
+                activeClass = 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-950/60 ring-1 ring-blue-300/40 scale-[1.03]';
+              }
+
+              let inactiveClass = 'text-emerald-200 hover:text-white hover:bg-emerald-900/40';
+              if (isDelivery) {
+                inactiveClass = 'text-blue-200 hover:text-white hover:bg-blue-900/40 border border-blue-400/20';
+              }
+
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-2.5 xl:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50 scale-[1.02]'
-                      : 'text-emerald-200 hover:text-white hover:bg-emerald-900/40'
+                    isActive ? activeClass : inactiveClass
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'stroke-[2.5]' : ''}`} />
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'stroke-[2.5]' : ''} ${isDelivery && !isActive ? 'text-blue-300' : ''}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -269,6 +279,7 @@ export const BottomNav: React.FC<{
               {secondaryTabs.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
+                const isDelivery = item.id === 'delivery';
                 return (
                   <button
                     key={item.id}
@@ -278,13 +289,23 @@ export const BottomNav: React.FC<{
                     }}
                     className={`flex items-center gap-3 p-3.5 rounded-2xl border text-right transition-all cursor-pointer ${
                       isActive
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm'
-                        : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100 text-slate-700'
+                        ? isDelivery
+                          ? 'bg-indigo-50 border-indigo-400 text-indigo-950 shadow-md ring-1 ring-indigo-400/40'
+                          : 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm'
+                        : isDelivery
+                          ? 'bg-blue-50/50 border-blue-200/80 hover:bg-blue-50 text-slate-800'
+                          : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100 text-slate-700'
                     }`}
                   >
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        isActive ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 shadow-xs'
+                        isActive
+                          ? isDelivery
+                            ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md'
+                            : 'bg-emerald-600 text-white'
+                          : isDelivery
+                            ? 'bg-indigo-100 text-indigo-700 shadow-xs'
+                            : 'bg-white text-slate-700 shadow-xs'
                       }`}
                     >
                       <Icon className="w-5 h-5" />
